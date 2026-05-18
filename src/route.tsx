@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useNavigate } from 'react-router-dom'
 import AppLayout from '@/layouts/app-layout'
 import GuestLayout from '@/layouts/guest-layout'
 
@@ -61,15 +61,73 @@ function wrap(el: ReactNode) {
   return <Suspense fallback={<Loader />}>{el}</Suspense>
 }
 
+// Route wrappers — supply navigation handlers to feature screens
+function LandingRoute() {
+  const navigate = useNavigate()
+  return <LandingScreen onCta={() => navigate('/signup')} onSignIn={() => navigate('/login')} />
+}
+function SignUpRoute() {
+  const navigate = useNavigate()
+  return <SignUpScreen onSubmit={() => navigate('/onboarding')} onSignIn={() => navigate('/login')} />
+}
+function LoginRoute() {
+  const navigate = useNavigate()
+  return <LoginScreen onSubmit={() => navigate('/dashboard')} onSignUp={() => navigate('/signup')} />
+}
+function AcceptInviteRoute() {
+  const navigate = useNavigate()
+  return <AcceptInviteScreen onSubmit={() => navigate('/claim')} />
+}
+function OnboardingRoute() {
+  const navigate = useNavigate()
+  return <OnboardingScreen onFinish={() => navigate('/dashboard')} onExit={() => navigate('/')} />
+}
+function OrgUserClaimRoute() {
+  const navigate = useNavigate()
+  return <OrgUserClaimScreen onClaim={() => navigate('/queue')} />
+}
+function ClientPhoneRoute() {
+  const navigate = useNavigate()
+  return <ClientPhoneScreen onContinue={() => navigate('/client/otp')} />
+}
+function ClientOTPRoute() {
+  const navigate = useNavigate()
+  return <ClientOTPScreen onContinue={() => navigate('/client/details')} onBack={() => navigate('/client')} />
+}
+function ClientNewDetailsRoute() {
+  const navigate = useNavigate()
+  return <ClientNewDetailsScreen onContinue={() => navigate('/client/slots')} onBack={() => navigate('/client/otp')} />
+}
+function ClientReturningRoute() {
+  const navigate = useNavigate()
+  return <ClientReturningScreen onContinue={() => navigate('/client/slots')} onBack={() => navigate('/client/otp')} />
+}
+function ClientSlotPickerRoute() {
+  const navigate = useNavigate()
+  return <ClientSlotPickerScreen onSelect={() => navigate('/client/confirm')} onBack={() => navigate('/client/details')} />
+}
+function ClientConfirmationRoute() {
+  const navigate = useNavigate()
+  return <ClientConfirmationScreen onApproved={() => navigate('/client/status')} onPickAnother={() => navigate('/client/slots')} />
+}
+function ClientStatusRoute() {
+  const navigate = useNavigate()
+  return <ClientStatusScreen onCancel={() => navigate('/')} />
+}
+function ClientRejectionRoute() {
+  const navigate = useNavigate()
+  return <ClientRejectionScreen onPickAnother={() => navigate('/client/slots')} onCancel={() => navigate('/')} />
+}
+
 const router = createBrowserRouter([
   // Marketing / auth (guest layout)
   {
     element: <GuestLayout />,
     children: [
-      { path: '/',               element: wrap(<LandingScreen onCta={() => {}} onSignIn={() => {}} />) },
-      { path: '/signup',         element: wrap(<SignUpScreen onSubmit={() => {}} onSignIn={() => {}} />) },
-      { path: '/login',          element: wrap(<LoginScreen onSubmit={() => {}} onSignUp={() => {}} />) },
-      { path: '/accept-invite',  element: wrap(<AcceptInviteScreen onSubmit={() => {}} />) },
+      { path: '/',               element: wrap(<LandingRoute />) },
+      { path: '/signup',         element: wrap(<SignUpRoute />) },
+      { path: '/login',          element: wrap(<LoginRoute />) },
+      { path: '/accept-invite',  element: wrap(<AcceptInviteRoute />) },
     ],
   },
 
@@ -78,7 +136,7 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       // Onboarding
-      { path: '/onboarding', element: wrap(<OnboardingScreen onFinish={() => {}} onExit={() => {}} />) },
+      { path: '/onboarding', element: wrap(<OnboardingRoute />) },
 
       // SuperUser dashboard + sub-pages
       { path: '/dashboard',            element: wrap(<SuperUserDashboard initialPage="dashboard" />) },
@@ -89,20 +147,20 @@ const router = createBrowserRouter([
       { path: '/dashboard/analytics',  element: wrap(<SuperUserDashboard initialPage="analytics" />) },
 
       // OrgUser
-      { path: '/claim',        element: wrap(<OrgUserClaimScreen onClaim={() => {}} />) },
+      { path: '/claim',        element: wrap(<OrgUserClaimRoute />) },
       { path: '/queue',        element: wrap(<OrgUserQueueScreen />) },
       { path: '/queue/dark',   element: wrap(<OrgUserQueueScreen darkExample />) },
       { path: '/availability', element: wrap(<AvailabilityView />) },
 
       // Client portal
-      { path: '/client',            element: wrap(<ClientPhoneScreen onContinue={() => {}} />) },
-      { path: '/client/otp',        element: wrap(<ClientOTPScreen onContinue={() => {}} onBack={() => {}} />) },
-      { path: '/client/details',    element: wrap(<ClientNewDetailsScreen onContinue={() => {}} onBack={() => {}} />) },
-      { path: '/client/returning',  element: wrap(<ClientReturningScreen onContinue={() => {}} onBack={() => {}} />) },
-      { path: '/client/slots',      element: wrap(<ClientSlotPickerScreen onSelect={() => {}} onBack={() => {}} />) },
-      { path: '/client/confirm',    element: wrap(<ClientConfirmationScreen onApproved={() => {}} onPickAnother={() => {}} />) },
-      { path: '/client/status',     element: wrap(<ClientStatusScreen onCancel={() => {}} />) },
-      { path: '/client/rejected',   element: wrap(<ClientRejectionScreen onPickAnother={() => {}} onCancel={() => {}} />) },
+      { path: '/client',            element: wrap(<ClientPhoneRoute />) },
+      { path: '/client/otp',        element: wrap(<ClientOTPRoute />) },
+      { path: '/client/details',    element: wrap(<ClientNewDetailsRoute />) },
+      { path: '/client/returning',  element: wrap(<ClientReturningRoute />) },
+      { path: '/client/slots',      element: wrap(<ClientSlotPickerRoute />) },
+      { path: '/client/confirm',    element: wrap(<ClientConfirmationRoute />) },
+      { path: '/client/status',     element: wrap(<ClientStatusRoute />) },
+      { path: '/client/rejected',   element: wrap(<ClientRejectionRoute />) },
 
       // System / design-system screens
       { path: '/system/empty',    element: wrap(<EmptyStatesScreen />) },
