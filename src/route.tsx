@@ -4,37 +4,37 @@ import AppLayout from '@/layouts/app-layout'
 import GuestLayout from '@/layouts/guest-layout'
 
 // Marketing
-const LandingScreen     = lazy(() => import('@/features/marketing/landing').then(m => ({ default: m.LandingScreen })))
-const SignUpScreen       = lazy(() => import('@/features/marketing/sign-up').then(m => ({ default: m.SignUpScreen })))
-const LoginScreen        = lazy(() => import('@/features/marketing/login').then(m => ({ default: m.LoginScreen })))
-const AcceptInviteScreen = lazy(() => import('@/features/marketing/accept-invite').then(m => ({ default: m.AcceptInviteScreen })))
+const LandingScreen     = lazy(() => import('@/views/marketing/landing').then(m => ({ default: m.LandingScreen })))
+const SignUpScreen       = lazy(() => import('@/views/marketing/sign-up').then(m => ({ default: m.SignUpScreen })))
+const LoginScreen        = lazy(() => import('@/views/marketing/login').then(m => ({ default: m.LoginScreen })))
+const AcceptInviteScreen = lazy(() => import('@/views/marketing/accept-invite').then(m => ({ default: m.AcceptInviteScreen })))
 
 // Onboarding
-const OnboardingScreen   = lazy(() => import('@/features/onboarding/onboarding').then(m => ({ default: m.OnboardingScreen })))
+const OnboardingScreen   = lazy(() => import('@/views/onboarding/onboarding').then(m => ({ default: m.OnboardingScreen })))
 
 // SuperUser
-const SuperUserDashboard = lazy(() => import('@/features/superuser/dashboard').then(m => ({ default: m.SuperUserDashboard })))
+const SuperUserDashboard = lazy(() => import('@/views/superuser/dashboard').then(m => ({ default: m.SuperUserDashboard })))
 
 // OrgUser
-const OrgUserClaimScreen = lazy(() => import('@/features/orguser/seat-claim').then(m => ({ default: m.OrgUserClaimScreen })))
-const OrgUserQueueScreen = lazy(() => import('@/features/orguser/live-queue').then(m => ({ default: m.OrgUserQueueScreen })))
-const AvailabilityView   = lazy(() => import('@/features/orguser/availability').then(m => ({ default: m.AvailabilityView })))
+const OrgUserClaimScreen = lazy(() => import('@/views/orguser/seat-claim').then(m => ({ default: m.OrgUserClaimScreen })))
+const OrgUserQueueScreen = lazy(() => import('@/views/orguser/live-queue').then(m => ({ default: m.OrgUserQueueScreen })))
+const AvailabilityView   = lazy(() => import('@/views/orguser/availability').then(m => ({ default: m.AvailabilityView })))
 
 // Client
-const ClientPhoneScreen       = lazy(() => import('@/features/client/phone').then(m => ({ default: m.ClientPhoneScreen })))
-const ClientOTPScreen         = lazy(() => import('@/features/client/otp').then(m => ({ default: m.ClientOTPScreen })))
-const ClientNewDetailsScreen  = lazy(() => import('@/features/client/new-details').then(m => ({ default: m.ClientNewDetailsScreen })))
-const ClientReturningScreen   = lazy(() => import('@/features/client/returning').then(m => ({ default: m.ClientReturningScreen })))
-const ClientSlotPickerScreen  = lazy(() => import('@/features/client/slot-picker').then(m => ({ default: m.ClientSlotPickerScreen })))
-const ClientConfirmationScreen = lazy(() => import('@/features/client/confirmation').then(m => ({ default: m.ClientConfirmationScreen })))
-const ClientStatusScreen      = lazy(() => import('@/features/client/status').then(m => ({ default: m.ClientStatusScreen })))
-const ClientRejectionScreen   = lazy(() => import('@/features/client/rejection').then(m => ({ default: m.ClientRejectionScreen })))
+const ClientPhoneScreen       = lazy(() => import('@/views/client/phone').then(m => ({ default: m.ClientPhoneScreen })))
+const ClientOTPScreen         = lazy(() => import('@/views/client/otp').then(m => ({ default: m.ClientOTPScreen })))
+const ClientNewDetailsScreen  = lazy(() => import('@/views/client/new-details').then(m => ({ default: m.ClientNewDetailsScreen })))
+const ClientReturningScreen   = lazy(() => import('@/views/client/returning').then(m => ({ default: m.ClientReturningScreen })))
+const ClientSlotPickerScreen  = lazy(() => import('@/views/client/slot-picker').then(m => ({ default: m.ClientSlotPickerScreen })))
+const ClientConfirmationScreen = lazy(() => import('@/views/client/confirmation').then(m => ({ default: m.ClientConfirmationScreen })))
+const ClientStatusScreen      = lazy(() => import('@/views/client/status').then(m => ({ default: m.ClientStatusScreen })))
+const ClientRejectionScreen   = lazy(() => import('@/views/client/rejection').then(m => ({ default: m.ClientRejectionScreen })))
 
 // System
-const EmptyStatesScreen    = lazy(() => import('@/features/system/empty-states').then(m => ({ default: m.EmptyStatesScreen })))
-const LoadingSkeletonScreen = lazy(() => import('@/features/system/loading-skeleton').then(m => ({ default: m.LoadingSkeletonScreen })))
-const ErrorStateScreen     = lazy(() => import('@/features/system/error-state').then(m => ({ default: m.ErrorStateScreen })))
-const SmsPreviewScreen     = lazy(() => import('@/features/system/sms-preview').then(m => ({ default: m.SmsPreviewScreen })))
+const EmptyStatesScreen    = lazy(() => import('@/views/system/empty-states').then(m => ({ default: m.EmptyStatesScreen })))
+const LoadingSkeletonScreen = lazy(() => import('@/views/system/loading-skeleton').then(m => ({ default: m.LoadingSkeletonScreen })))
+const ErrorStateScreen     = lazy(() => import('@/views/system/error-state').then(m => ({ default: m.ErrorStateScreen })))
+const SmsPreviewScreen     = lazy(() => import('@/views/system/sms-preview').then(m => ({ default: m.SmsPreviewScreen })))
 
 function Loader() {
   return (

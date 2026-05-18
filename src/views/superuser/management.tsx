@@ -1,4 +1,4 @@
-// src/features/superuser/management.tsx
+// src/views/superuser/management.tsx
 // All 5 super-user management views: OrgUsers, Seats, Timeslots, ClientLinks, Analytics
 
 import { useState, useMemo, type ReactNode } from 'react';
