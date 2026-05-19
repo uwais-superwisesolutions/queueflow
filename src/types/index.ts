@@ -1,5 +1,11 @@
 export * from './authTypes';
 export * from './organisationTypes';
+export * from './departmentTypes';
+export * from './seatTypes';
+export * from './timeslotTypeTypes';
+export * from './availabilityTypes';
+export * from './publicHolidayTypes';
+export * from './clientTypes';
 
 export type Tone = 'neutral' | 'teal' | 'amber' | 'blue' | 'coral' | 'success';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost' | 'outline' | 'teal-tint';

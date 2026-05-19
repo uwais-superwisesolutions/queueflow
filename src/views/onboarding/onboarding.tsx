@@ -1,11 +1,38 @@
-import { useEffect, useState } from 'react';
-import { Icon, Button, Card, Divider, Pill, TextInput, SelectInput, QRPlaceholder } from '@/components/ui';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { Icon, Button, Card, Divider, Pill, TextInput, SelectInput, QRCode } from '@/components/ui';
+import { useCopy } from '@/hooks/use-copy';
 import { QFLogo } from '@/components/layout';
 import { cn } from '@/lib/utils';
-import type { IconName } from '@/types';
-import { completeOnboarding, getOrganisation, updateOnboardingStep } from '@/services/organisationApi';
+import type {
+  DepartmentResponse,
+  IconName,
+  InvitationResponse,
+  SeatResponse,
+  TimeslotTypeResponse,
+} from '@/types';
+import {
+  completeOnboarding,
+  getOrganisation,
+  inviteUser,
+  updateOnboardingStep,
+} from '@/services/organisationApi';
+import {
+  createDepartment,
+  deleteDepartment,
+  listDepartments,
+} from '@/services/departmentApi';
+import { createSeat, deleteSeat, listSeats } from '@/services/seatApi';
+import {
+  createTimeslotType,
+  deleteTimeslotType,
+  listTimeslotTypes,
+} from '@/services/timeslotTypeApi';
 import { useAuthStore } from '@/stores/authStore';
 import { getApiErrorMessage } from '@/lib/api-error';
+
+// ---------------------------------------------------------------------------
+// Step model
+// ---------------------------------------------------------------------------
 
 interface WizStep {
   id: number;
@@ -28,9 +55,16 @@ function stepIndexFromKey(key: string | null | undefined): number {
   return found === -1 ? 0 : found;
 }
 
+type SaveFn = () => Promise<boolean>;
+type SaveRef = MutableRefObject<SaveFn | null>;
+
+// ---------------------------------------------------------------------------
+// Timeslot colour palette
+// ---------------------------------------------------------------------------
+
 interface TimeslotColor {
-  v: string;
-  bg: string;
+  v: string;   // semantic key stored locally
+  bg: string;  // hex actually sent to the backend
 }
 
 const TIMESLOT_COLORS: TimeslotColor[] = [
@@ -42,32 +76,15 @@ const TIMESLOT_COLORS: TimeslotColor[] = [
   { v: 'olive', bg: '#7a8336' },
 ];
 
-interface Department {
-  id: number;
-  name: string;
+function colourFromHex(hex: string | null | undefined): string {
+  if (!hex) return TIMESLOT_COLORS[0].v;
+  const match = TIMESLOT_COLORS.find((c) => c.bg.toLowerCase() === hex.toLowerCase());
+  return match ? match.v : TIMESLOT_COLORS[0].v;
 }
 
-interface Seat {
-  id: number;
-  deptId: number;
-  name: string;
-  desc: string;
-}
-
-interface Invite {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  seat: string;
-}
-
-interface TimeslotType {
-  id: number;
-  name: string;
-  duration: number;
-  color: string;
-}
+// ---------------------------------------------------------------------------
+// Wizard shell
+// ---------------------------------------------------------------------------
 
 interface OnboardingScreenProps {
   initialStep?: number;
@@ -77,11 +94,14 @@ interface OnboardingScreenProps {
 
 export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: OnboardingScreenProps) {
   const [step, setStep] = useState(initialStep);
+  const [saving, setSaving] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const organisationName = useAuthStore((s) => s.organisationName);
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
   const setOrganisationName = useAuthStore((s) => s.setOrganisationName);
+
+  const saveRef = useRef<SaveFn | null>(null);
 
   // Resume from the server-saved step on first mount.
   useEffect(() => {
@@ -92,27 +112,48 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
         if (cancelled) return;
         if (resp.data.name) setOrganisationName(resp.data.name);
         if (resp.data.onboardingComplete) {
-          // Already done — bounce out of the wizard.
           setOnboardingComplete(true);
           onFinish?.();
           return;
         }
         setStep(stepIndexFromKey(resp.data.onboardingStep));
       } catch {
-        // Best-effort resume. Stay on initialStep if the org call fails.
+        // Best-effort resume.
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [onFinish, setOnboardingComplete, setOrganisationName]);
 
   const persistStep = (index: number) => {
     const key = WIZ_STEPS[index]?.key;
     if (!key) return;
-    // Fire-and-forget: a failed save shouldn't block the user navigating.
     updateOnboardingStep({ onboardingStep: key }).catch(() => {});
   };
+
+  const advance = async (withSave: boolean) => {
+    setError(null);
+    if (withSave && saveRef.current) {
+      setSaving(true);
+      try {
+        const ok = await saveRef.current();
+        if (!ok) return;
+      } finally {
+        setSaving(false);
+      }
+    }
+    setStep((s) => {
+      const ns = Math.min(s + 1, WIZ_STEPS.length - 1);
+      if (ns !== s) persistStep(ns);
+      return ns;
+    });
+  };
+
+  const goBack = () =>
+    setStep((s) => {
+      const ns = Math.max(s - 1, 0);
+      if (ns !== s) persistStep(ns);
+      return ns;
+    });
 
   const handleFinish = async () => {
     setError(null);
@@ -128,43 +169,6 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
     }
   };
 
-  const [departments, setDepartments] = useState<Department[]>([
-    { id: 1, name: 'General Practice' },
-    { id: 2, name: 'Dental' },
-    { id: 3, name: 'Pediatrics' },
-  ]);
-  const [seats, setSeats] = useState<Seat[]>([
-    { id: 1, deptId: 1, name: 'Consultation room 1', desc: "Dr. Okonkwo's primary room" },
-    { id: 2, deptId: 1, name: 'Consultation room 2', desc: '' },
-    { id: 3, deptId: 1, name: 'Consultation room 3', desc: '' },
-    { id: 4, deptId: 2, name: 'Dental chair A', desc: '' },
-    { id: 5, deptId: 2, name: 'Dental chair B', desc: '' },
-    { id: 6, deptId: 3, name: 'Peds room', desc: 'Quieter wing' },
-  ]);
-  const [invites, setInvites] = useState<Invite[]>([
-    { id: 1, name: 'Amara Okonkwo',  email: 'amara@bryanstonfp.co.za', role: 'Org user',   seat: 'Consultation room 1' },
-    { id: 2, name: 'Sipho Dlamini',  email: 'sipho@bryanstonfp.co.za', role: 'Org user',   seat: 'Consultation room 2' },
-    { id: 3, name: 'Kefilwe Nkosi',  email: 'kefi@bryanstonfp.co.za',  role: 'Super user', seat: '—' },
-    { id: 4, name: '',               email: '',                         role: 'Org user',   seat: '—' },
-  ]);
-  const [timeslots, setTimeslots] = useState<TimeslotType[]>([
-    { id: 1, name: 'Consult',   duration: 30, color: 'teal' },
-    { id: 2, name: 'Follow-up', duration: 15, color: 'blue' },
-  ]);
-
-  const next = () =>
-    setStep((s) => {
-      const ns = Math.min(s + 1, WIZ_STEPS.length - 1);
-      if (ns !== s) persistStep(ns);
-      return ns;
-    });
-  const prev = () =>
-    setStep((s) => {
-      const ns = Math.max(s - 1, 0);
-      if (ns !== s) persistStep(ns);
-      return ns;
-    });
-
   const orgDisplayName = organisationName || 'your organisation';
 
   const headings = [
@@ -179,15 +183,17 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
     'Departments group your seats together — think of them as the rooms or service areas in your practice. You can change these later in settings.',
     'A seat is a room, chair, or workstation that a staff member can claim for a shift. The queue routes new requests to whoever is claiming that seat.',
     "We'll send each person an email with a link to set their password. You can skip this and add people later.",
-    'These are the services clients can book. Each has a duration and color so they\'re easy to scan in the live queue.',
+    "These are the services clients can book. Each has a duration and color so they're easy to scan in the live queue.",
     'Print the QR or copy the link. Anyone who scans this can join your queue and pick a time.',
   ];
 
+  // Reset save handle whenever step changes so a stale step's saver doesn't run.
+  useEffect(() => {
+    saveRef.current = null;
+  }, [step]);
+
   return (
-    <div
-      className="bg-bg flex flex-col"
-      style={{ minHeight: 'calc(100vh - 48px)' }}
-    >
+    <div className="bg-bg flex flex-col" style={{ minHeight: 'calc(100vh - 48px)' }}>
       <header className="px-8 py-5 border-b border-line bg-surface flex items-center gap-6">
         <QFLogo size={18} />
         <span className="text-[12px] text-ink-3">{orgDisplayName}</span>
@@ -195,19 +201,13 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
         <Button variant="ghost" size="sm" onClick={onExit}>Save &amp; exit</Button>
       </header>
 
-      <main
-        className="flex-1 flex justify-center overflow-auto"
-        style={{ padding: '40px 32px 100px' }}
-      >
+      <main className="flex-1 flex justify-center overflow-auto" style={{ padding: '40px 32px 100px' }}>
         <div className="w-full max-w-[720px]">
           <div className="mb-6">
             <div className="mono text-[11.5px] text-ink-4" style={{ letterSpacing: '0.06em' }}>
               STEP {step + 1} OF {WIZ_STEPS.length}
             </div>
-            <h1
-              className="my-2 text-[26px] font-medium"
-              style={{ letterSpacing: '-0.025em' }}
-            >
+            <h1 className="my-2 text-[26px] font-medium" style={{ letterSpacing: '-0.025em' }}>
               {headings[step]}
             </h1>
             <p className="m-0 text-ink-3 text-[14px] max-w-[540px]">
@@ -215,26 +215,11 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
             </p>
           </div>
 
-          {step === 0 && (
-            <DepartmentsStep departments={departments} setDepartments={setDepartments} />
-          )}
-          {step === 1 && (
-            <SeatsStep departments={departments} seats={seats} setSeats={setSeats} />
-          )}
-          {step === 2 && (
-            <InvitesStep invites={invites} setInvites={setInvites} seats={seats} />
-          )}
-          {step === 3 && (
-            <TimeslotsStep timeslots={timeslots} setTimeslots={setTimeslots} />
-          )}
-          {step === 4 && (
-            <ShareStep
-              departments={departments}
-              seats={seats}
-              invites={invites}
-              orgName={orgDisplayName}
-            />
-          )}
+          {step === 0 && <DepartmentsStep saveRef={saveRef} onError={setError} />}
+          {step === 1 && <SeatsStep saveRef={saveRef} onError={setError} />}
+          {step === 2 && <InvitesStep saveRef={saveRef} onError={setError} />}
+          {step === 3 && <TimeslotsStep saveRef={saveRef} onError={setError} />}
+          {step === 4 && <ShareStep orgName={orgDisplayName} />}
         </div>
       </main>
 
@@ -258,25 +243,46 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
         {error && (
           <span className="text-coral text-[12px] mr-2" role="alert">{error}</span>
         )}
-        <Button variant="ghost" disabled={step === 0 || finishing} onClick={prev} icon="chevronL">Back</Button>
-        {step === 2 && <Button variant="ghost" onClick={next}>Skip for now</Button>}
-        {step < WIZ_STEPS.length - 1
-          ? <Button variant="primary" onClick={next} iconRight="arrowR">Continue</Button>
-          : (
-            <Button
-              variant="primary"
-              onClick={handleFinish}
-              iconRight="check"
-              disabled={finishing}
-            >
-              {finishing ? 'Finishing…' : 'Finish setup'}
-            </Button>
-          )
-        }
+        <Button
+          variant="ghost"
+          disabled={step === 0 || saving || finishing}
+          onClick={goBack}
+          icon="chevronL"
+        >
+          Back
+        </Button>
+        {step === 2 && (
+          <Button variant="ghost" onClick={() => advance(false)} disabled={saving}>
+            Skip for now
+          </Button>
+        )}
+        {step < WIZ_STEPS.length - 1 ? (
+          <Button
+            variant="primary"
+            onClick={() => advance(true)}
+            iconRight="arrowR"
+            disabled={saving}
+          >
+            {saving ? 'Saving…' : 'Continue'}
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            onClick={handleFinish}
+            iconRight="check"
+            disabled={finishing}
+          >
+            {finishing ? 'Finishing…' : 'Finish setup'}
+          </Button>
+        )}
       </footer>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// ProgressBar
+// ---------------------------------------------------------------------------
 
 interface ProgressBarProps {
   step: number;
@@ -324,31 +330,103 @@ function ProgressBar({ step, className }: ProgressBarProps) {
   );
 }
 
-interface DepartmentsStepProps {
-  departments: Department[];
-  setDepartments: React.Dispatch<React.SetStateAction<Department[]>>;
+// ---------------------------------------------------------------------------
+// Departments step
+// ---------------------------------------------------------------------------
+
+interface DepartmentRow {
+  /** UUID for server-side items; `local:<n>` for unsaved rows. */
+  id: string;
+  name: string;
 }
 
-function DepartmentsStep({ departments, setDepartments }: DepartmentsStepProps) {
-  const add = () => setDepartments(prev => [...prev, { id: Date.now(), name: '' }]);
-  const remove = (id: number) => setDepartments(prev => prev.filter(d => d.id !== id));
-  const update = (id: number, name: string) =>
-    setDepartments(prev => prev.map(d => d.id === id ? { ...d, name } : d));
+let localIdCounter = 0;
+const nextLocalId = () => `local:${++localIdCounter}`;
+const isLocalId = (id: string) => id.startsWith('local:');
+
+interface StepProps {
+  saveRef: SaveRef;
+  onError: (message: string | null) => void;
+}
+
+function DepartmentsStep({ saveRef, onError }: StepProps) {
+  const [rows, setRows] = useState<DepartmentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await listDepartments();
+        if (cancelled) return;
+        const mapped: DepartmentRow[] = resp.data
+          .sort((a, b) => a.displayOrder - b.displayOrder)
+          .map((d) => ({ id: d.id, name: d.name }));
+        setRows(mapped.length > 0 ? mapped : [{ id: nextLocalId(), name: '' }]);
+      } catch (err) {
+        onError(getApiErrorMessage(err, 'Could not load departments.'));
+        setRows([{ id: nextLocalId(), name: '' }]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [onError]);
+
+  saveRef.current = async () => {
+    const trimmed = rows.map((r) => ({ ...r, name: r.name.trim() }));
+    const toCreate = trimmed.filter((r) => isLocalId(r.id) && r.name.length > 0);
+    if (toCreate.length === 0) return true;
+
+    onError(null);
+    try {
+      for (const r of toCreate) {
+        const order = trimmed.findIndex((x) => x.id === r.id);
+        const resp = await createDepartment({ name: r.name, displayOrder: order });
+        setRows((prev) => prev.map((x) => (x.id === r.id ? { id: resp.data.id, name: resp.data.name } : x)));
+      }
+      return true;
+    } catch (err) {
+      onError(getApiErrorMessage(err, 'Could not save departments.'));
+      return false;
+    }
+  };
+
+  const add = () => setRows((prev) => [...prev, { id: nextLocalId(), name: '' }]);
+
+  const remove = async (id: string) => {
+    if (isLocalId(id)) {
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      return;
+    }
+    onError(null);
+    try {
+      await deleteDepartment(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      onError(getApiErrorMessage(err, 'Could not delete department.'));
+    }
+  };
+
+  const update = (id: string, name: string) =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, name } : r)));
 
   return (
     <Card padding={0}>
       <div className="px-[18px] py-4 border-b border-line flex items-center gap-3">
         <Icon name="building" size={16} className="text-ink-3" />
         <span className="text-[13px] text-ink-2 font-medium">Departments</span>
-        <span className="ml-auto text-[12px] text-ink-3">{departments.length} added</span>
+        <span className="ml-auto text-[12px] text-ink-3">
+          {loading ? 'Loading…' : `${rows.length} added`}
+        </span>
       </div>
       <div className="p-2">
-        {departments.map((d, i) => (
+        {rows.map((d, i) => (
           <div
             key={d.id}
             className={cn(
               'flex items-center gap-2.5 px-1.5 py-2',
-              i < departments.length - 1 && 'border-b border-line',
+              i < rows.length - 1 && 'border-b border-line',
             )}
           >
             <span
@@ -359,9 +437,9 @@ function DepartmentsStep({ departments, setDepartments }: DepartmentsStepProps) 
             </span>
             <TextInput
               value={d.name}
-              onChange={e => update(d.id, e.target.value)}
+              onChange={(e) => update(d.id, e.target.value)}
               placeholder="e.g. General Practice"
-              wrapClassName="flex-1"
+              wrapClassName="flex-1 min-w-0"
             />
             <button
               onClick={() => remove(d.id)}
@@ -380,23 +458,126 @@ function DepartmentsStep({ departments, setDepartments }: DepartmentsStepProps) 
   );
 }
 
-interface SeatsStepProps {
-  departments: Department[];
-  seats: Seat[];
-  setSeats: React.Dispatch<React.SetStateAction<Seat[]>>;
+// ---------------------------------------------------------------------------
+// Seats step
+// ---------------------------------------------------------------------------
+
+interface SeatRow {
+  id: string;       // UUID or local:<n>
+  departmentId: string;
+  name: string;
+  description: string;
 }
 
-function SeatsStep({ departments, seats, setSeats }: SeatsStepProps) {
-  const add = (deptId: number) =>
-    setSeats(prev => [...prev, { id: Date.now(), deptId, name: '', desc: '' }]);
-  const remove = (id: number) => setSeats(prev => prev.filter(s => s.id !== id));
-  const update = (id: number, k: keyof Omit<Seat, 'id' | 'deptId'>, v: string) =>
-    setSeats(prev => prev.map(s => s.id === id ? { ...s, [k]: v } : s));
+function SeatsStep({ saveRef, onError }: StepProps) {
+  const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
+  const [seats, setSeats] = useState<SeatRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [deptResp, seatResp] = await Promise.all([listDepartments(), listSeats()]);
+        if (cancelled) return;
+        setDepartments(deptResp.data.sort((a, b) => a.displayOrder - b.displayOrder));
+        setSeats(
+          seatResp.data
+            .sort((a, b) => a.displayOrder - b.displayOrder)
+            .map((s) => ({
+              id: s.id,
+              departmentId: s.departmentId,
+              name: s.name,
+              description: s.description ?? '',
+            })),
+        );
+      } catch (err) {
+        onError(getApiErrorMessage(err, 'Could not load seats.'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [onError]);
+
+  saveRef.current = async () => {
+    const trimmed = seats.map((s) => ({ ...s, name: s.name.trim() }));
+    const toCreate = trimmed.filter((s) => isLocalId(s.id) && s.name.length > 0);
+    if (toCreate.length === 0) return true;
+
+    onError(null);
+    try {
+      for (const s of toCreate) {
+        const order = trimmed.findIndex((x) => x.id === s.id);
+        const resp = await createSeat({
+          departmentId: s.departmentId,
+          name: s.name,
+          description: s.description || null,
+          requiresApproval: true,
+          displayOrder: order,
+        });
+        setSeats((prev) =>
+          prev.map((x) =>
+            x.id === s.id
+              ? {
+                  id: resp.data.id,
+                  departmentId: resp.data.departmentId,
+                  name: resp.data.name,
+                  description: resp.data.description ?? '',
+                }
+              : x,
+          ),
+        );
+      }
+      return true;
+    } catch (err) {
+      onError(getApiErrorMessage(err, 'Could not save seats.'));
+      return false;
+    }
+  };
+
+  const add = (departmentId: string) =>
+    setSeats((prev) => [...prev, { id: nextLocalId(), departmentId, name: '', description: '' }]);
+
+  const remove = async (id: string) => {
+    if (isLocalId(id)) {
+      setSeats((prev) => prev.filter((s) => s.id !== id));
+      return;
+    }
+    onError(null);
+    try {
+      await deleteSeat(id);
+      setSeats((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      onError(getApiErrorMessage(err, 'Could not delete seat.'));
+    }
+  };
+
+  const update = (id: string, key: 'name' | 'description', value: string) =>
+    setSeats((prev) => prev.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
+
+  if (loading) {
+    return (
+      <Card padding={20}>
+        <div className="text-[13px] text-ink-3">Loading seats…</div>
+      </Card>
+    );
+  }
+
+  if (departments.length === 0) {
+    return (
+      <Card padding={20}>
+        <div className="text-[13px] text-ink-3">
+          You haven't added any departments yet. Go back to the previous step to add one before adding seats.
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3.5">
-      {departments.map(d => {
-        const ds = seats.filter(s => s.deptId === d.id);
+      {departments.map((d) => {
+        const ds = seats.filter((s) => s.departmentId === d.id);
         return (
           <Card key={d.id} padding={0}>
             <div className="px-4 py-3 border-b border-line flex items-center gap-2.5 bg-surface-2">
@@ -420,18 +601,20 @@ function SeatsStep({ departments, seats, setSeats }: SeatsStepProps) {
                     'px-4 py-3 grid items-center gap-2.5',
                     i < ds.length - 1 && 'border-b border-line',
                   )}
-                  style={{ gridTemplateColumns: 'auto 1fr 1.4fr auto' }}
+                  style={{ gridTemplateColumns: 'auto minmax(0, 1fr) minmax(0, 1.4fr) auto' }}
                 >
                   <Icon name="chair" size={15} className="text-ink-3" />
                   <TextInput
                     value={s.name}
-                    onChange={e => update(s.id, 'name', e.target.value)}
+                    onChange={(e) => update(s.id, 'name', e.target.value)}
                     placeholder="Seat name"
+                    wrapClassName="min-w-0"
                   />
                   <TextInput
-                    value={s.desc}
-                    onChange={e => update(s.id, 'desc', e.target.value)}
+                    value={s.description}
+                    onChange={(e) => update(s.id, 'description', e.target.value)}
                     placeholder="Optional description"
+                    wrapClassName="min-w-0"
                   />
                   <button
                     onClick={() => remove(s.id)}
@@ -449,74 +632,159 @@ function SeatsStep({ departments, seats, setSeats }: SeatsStepProps) {
   );
 }
 
-interface InvitesStepProps {
-  invites: Invite[];
-  setInvites: React.Dispatch<React.SetStateAction<Invite[]>>;
-  seats: Seat[];
+// ---------------------------------------------------------------------------
+// Invites step
+// ---------------------------------------------------------------------------
+
+type InviteRole = 'org_user' | 'super_user';
+
+interface InviteRow {
+  id: string;            // UUID for sent invites, local:<n> otherwise
+  email: string;
+  role: InviteRole;
+  preferredSeat: string; // seat UUID or ""
+  accepted: boolean;
+  isExisting: boolean;
 }
 
-function InvitesStep({ invites, setInvites, seats }: InvitesStepProps) {
-  const seatOptions = ['—', ...seats.map(s => s.name).filter(Boolean)];
-  const add = () =>
-    setInvites(prev => [...prev, { id: Date.now(), name: '', email: '', role: 'Org user', seat: '—' }]);
-  const remove = (id: number) => setInvites(prev => prev.filter(i => i.id !== id));
-  const update = (id: number, k: keyof Omit<Invite, 'id'>, v: string) =>
-    setInvites(prev => prev.map(i => i.id === id ? { ...i, [k]: v } : i));
+const INVITE_GRID = 'minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) auto 32px';
 
-  const readyCount = invites.filter(i => i.email).length;
+function InvitesStep({ saveRef, onError }: StepProps) {
+  const [rows, setRows] = useState<InviteRow[]>([]);
+  const [seats, setSeats] = useState<SeatResponse[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const invitesGridTemplate =
-    'minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) 32px';
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Fetching seats and existing invitations in parallel.
+        const [seatsResp, invitesResp] = await Promise.all([
+          listSeats(),
+          // organisationApi already exposes getInvitations
+          import('@/services/organisationApi').then((m) => m.getInvitations()),
+        ]);
+        if (cancelled) return;
+        setSeats(seatsResp.data);
+        const existing: InviteRow[] = (invitesResp.data as InvitationResponse[]).map((i) => ({
+          id: i.id,
+          email: i.email,
+          role: (i.role as InviteRole) ?? 'org_user',
+          preferredSeat: '',
+          accepted: i.accepted,
+          isExisting: true,
+        }));
+        setRows(existing.length > 0 ? existing : [emptyInviteRow()]);
+      } catch (err) {
+        onError(getApiErrorMessage(err, 'Could not load invitations.'));
+        setRows([emptyInviteRow()]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [onError]);
+
+  saveRef.current = async () => {
+    const toSend = rows.filter((r) => !r.isExisting && r.email.trim().length > 0);
+    if (toSend.length === 0) return true;
+
+    onError(null);
+    try {
+      for (const r of toSend) {
+        await inviteUser({
+          email: r.email.trim(),
+          role: r.role,
+          preferredSeat: r.preferredSeat || null,
+        });
+        setRows((prev) =>
+          prev.map((x) => (x.id === r.id ? { ...x, isExisting: true } : x)),
+        );
+      }
+      return true;
+    } catch (err) {
+      onError(getApiErrorMessage(err, 'Could not send invites.'));
+      return false;
+    }
+  };
+
+  const add = () => setRows((prev) => [...prev, emptyInviteRow()]);
+  const remove = (id: string) => setRows((prev) => prev.filter((r) => r.id !== id));
+  const update = <K extends keyof Omit<InviteRow, 'id' | 'accepted' | 'isExisting'>>(
+    id: string,
+    key: K,
+    value: InviteRow[K],
+  ) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
+
+  const seatOptions = useMemo(
+    () => [{ value: '', label: '—' }, ...seats.map((s) => ({ value: s.id, label: s.name }))],
+    [seats],
+  );
+  const roleOptions: { value: InviteRole; label: string }[] = [
+    { value: 'org_user', label: 'Org user' },
+    { value: 'super_user', label: 'Super user' },
+  ];
+
+  const readyCount = rows.filter((r) => !r.isExisting && r.email.trim().length > 0).length;
+
+  if (loading) {
+    return (
+      <Card padding={20}>
+        <div className="text-[13px] text-ink-3">Loading invites…</div>
+      </Card>
+    );
+  }
 
   return (
     <Card padding={0}>
       <div
         className="grid px-4 py-2.5 border-b border-line bg-surface-2 text-[11.5px] text-ink-3 font-medium uppercase"
-        style={{ gridTemplateColumns: invitesGridTemplate, letterSpacing: '0.05em' }}
+        style={{ gridTemplateColumns: INVITE_GRID, letterSpacing: '0.05em' }}
       >
-        <span>Name</span>
         <span>Email</span>
         <span>Role</span>
         <span>Assigned seat</span>
+        <span>Status</span>
         <span />
       </div>
       <div>
-        {invites.map((inv, i) => (
+        {rows.map((inv, i) => (
           <div
             key={inv.id}
             className={cn(
               'grid px-4 py-2.5 items-center gap-2.5',
-              i < invites.length - 1 && 'border-b border-line',
+              i < rows.length - 1 && 'border-b border-line',
             )}
-            style={{ gridTemplateColumns: invitesGridTemplate }}
+            style={{ gridTemplateColumns: INVITE_GRID }}
           >
             <TextInput
-              value={inv.name}
-              onChange={e => update(inv.id, 'name', e.target.value)}
-              placeholder="Full name"
-              wrapClassName="min-w-0"
-            />
-            <TextInput
               value={inv.email}
-              onChange={e => update(inv.id, 'email', e.target.value)}
+              onChange={(e) => update(inv.id, 'email', e.target.value)}
               placeholder="name@clinic.com"
               wrapClassName="min-w-0"
+              disabled={inv.isExisting}
             />
             <SelectInput
               value={inv.role}
-              onChange={e => update(inv.id, 'role', e.target.value)}
-              options={['Org user', 'Super user']}
+              onChange={(e) => update(inv.id, 'role', e.target.value as InviteRole)}
+              options={roleOptions}
               wrapClassName="min-w-0"
+              disabled={inv.isExisting}
             />
             <SelectInput
-              value={inv.seat}
-              onChange={e => update(inv.id, 'seat', e.target.value)}
+              value={inv.preferredSeat}
+              onChange={(e) => update(inv.id, 'preferredSeat', e.target.value)}
               options={seatOptions}
               wrapClassName="min-w-0"
+              disabled={inv.isExisting}
             />
+            <Pill tone={inv.isExisting ? (inv.accepted ? 'success' : 'amber') : 'neutral'}>
+              {inv.isExisting ? (inv.accepted ? 'Accepted' : 'Sent') : 'New'}
+            </Pill>
             <button
               onClick={() => remove(inv.id)}
-              className="border-0 bg-transparent cursor-pointer text-ink-3 p-1.5 rounded-[6px] hover:bg-surface-2"
+              disabled={inv.isExisting}
+              className="border-0 bg-transparent cursor-pointer text-ink-3 p-1.5 rounded-[6px] hover:bg-surface-2 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Icon name="trash" size={14} />
             </button>
@@ -529,37 +797,137 @@ function InvitesStep({ invites, setInvites, seats }: InvitesStepProps) {
         <span className="text-[12px] text-ink-3">
           {readyCount} invite{readyCount !== 1 ? 's' : ''} ready to send
         </span>
-        <Button variant="primary" icon="send">Send invites</Button>
       </div>
     </Card>
   );
 }
 
-interface TimeslotsStepProps {
-  timeslots: TimeslotType[];
-  setTimeslots: React.Dispatch<React.SetStateAction<TimeslotType[]>>;
+function emptyInviteRow(): InviteRow {
+  return {
+    id: nextLocalId(),
+    email: '',
+    role: 'org_user',
+    preferredSeat: '',
+    accepted: false,
+    isExisting: false,
+  };
 }
 
-function TimeslotsStep({ timeslots, setTimeslots }: TimeslotsStepProps) {
-  const add = () =>
-    setTimeslots(prev => [...prev, { id: Date.now(), name: '', duration: 30, color: 'teal' }]);
-  const remove = (id: number) => setTimeslots(prev => prev.filter(t => t.id !== id));
-  const update = <K extends keyof Omit<TimeslotType, 'id'>>(id: number, k: K, v: TimeslotType[K]) =>
-    setTimeslots(prev => prev.map(t => t.id === id ? { ...t, [k]: v } : t));
+// ---------------------------------------------------------------------------
+// Timeslots step
+// ---------------------------------------------------------------------------
+
+interface TimeslotRow {
+  id: string;            // UUID or local:<n>
+  name: string;
+  durationMinutes: number;
+  color: string;         // semantic key
+}
+
+function TimeslotsStep({ saveRef, onError }: StepProps) {
+  const [rows, setRows] = useState<TimeslotRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await listTimeslotTypes();
+        if (cancelled) return;
+        const mapped: TimeslotRow[] = resp.data.map((t) => ({
+          id: t.id,
+          name: t.name,
+          durationMinutes: t.durationMinutes,
+          color: colourFromHex(t.color),
+        }));
+        setRows(mapped.length > 0 ? mapped : [emptyTimeslotRow()]);
+      } catch (err) {
+        onError(getApiErrorMessage(err, 'Could not load timeslot types.'));
+        setRows([emptyTimeslotRow()]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [onError]);
+
+  saveRef.current = async () => {
+    const toCreate = rows.filter(
+      (r) => isLocalId(r.id) && r.name.trim().length > 0 && r.durationMinutes > 0,
+    );
+    if (toCreate.length === 0) return true;
+
+    onError(null);
+    try {
+      for (const r of toCreate) {
+        const hex = TIMESLOT_COLORS.find((c) => c.v === r.color)?.bg ?? null;
+        const resp = await createTimeslotType({
+          name: r.name.trim(),
+          durationMinutes: r.durationMinutes,
+          color: hex,
+        });
+        setRows((prev) =>
+          prev.map((x) =>
+            x.id === r.id
+              ? {
+                  id: resp.data.id,
+                  name: resp.data.name,
+                  durationMinutes: resp.data.durationMinutes,
+                  color: colourFromHex(resp.data.color),
+                }
+              : x,
+          ),
+        );
+      }
+      return true;
+    } catch (err) {
+      onError(getApiErrorMessage(err, 'Could not save timeslot types.'));
+      return false;
+    }
+  };
+
+  const add = () => setRows((prev) => [...prev, emptyTimeslotRow()]);
+  const remove = async (id: string) => {
+    if (isLocalId(id)) {
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      return;
+    }
+    onError(null);
+    try {
+      await deleteTimeslotType(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      onError(getApiErrorMessage(err, 'Could not delete timeslot type.'));
+    }
+  };
+
+  const update = <K extends keyof Omit<TimeslotRow, 'id'>>(
+    id: string,
+    key: K,
+    value: TimeslotRow[K],
+  ) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
+
+  if (loading) {
+    return (
+      <Card padding={20}>
+        <div className="text-[13px] text-ink-3">Loading timeslot types…</div>
+      </Card>
+    );
+  }
 
   return (
     <Card padding={0}>
       <div className="p-2">
-        {timeslots.map((t, i) => {
-          const colorObj = TIMESLOT_COLORS.find(c => c.v === t.color) ?? TIMESLOT_COLORS[0];
+        {rows.map((t, i) => {
+          const colorObj = TIMESLOT_COLORS.find((c) => c.v === t.color) ?? TIMESLOT_COLORS[0];
           return (
             <div
               key={t.id}
               className={cn(
                 'grid items-center gap-2.5 p-2.5',
-                i < timeslots.length - 1 && 'border-b border-line',
+                i < rows.length - 1 && 'border-b border-line',
               )}
-              style={{ gridTemplateColumns: 'auto 2fr 1fr auto auto' }}
+              style={{ gridTemplateColumns: 'auto minmax(0, 2fr) minmax(0, 1fr) auto auto' }}
             >
               <div
                 className="inline-flex items-center justify-center text-white rounded-[8px] flex-none"
@@ -569,20 +937,22 @@ function TimeslotsStep({ timeslots, setTimeslots }: TimeslotsStepProps) {
               </div>
               <TextInput
                 value={t.name}
-                onChange={e => update(t.id, 'name', e.target.value)}
+                onChange={(e) => update(t.id, 'name', e.target.value)}
                 placeholder="Service name (e.g. Consult)"
+                wrapClassName="min-w-0"
               />
-              <div className="flex items-center gap-2 bg-surface border border-line-2 rounded-[8px] px-2.5 h-[38px]">
+              <div className="flex items-center gap-2 bg-surface border border-line-2 rounded-[8px] px-2.5 h-[38px] min-w-0">
                 <input
                   type="number"
-                  value={t.duration}
-                  onChange={e => update(t.id, 'duration', +e.target.value)}
-                  className="flex-1 h-full border-0 bg-transparent font-[inherit] text-ink outline-none w-10"
+                  min={1}
+                  value={t.durationMinutes}
+                  onChange={(e) => update(t.id, 'durationMinutes', Math.max(1, Number(e.target.value) || 0))}
+                  className="flex-1 h-full border-0 bg-transparent font-[inherit] text-ink outline-none w-10 min-w-0"
                 />
                 <span className="text-[12px] text-ink-3">min</span>
               </div>
               <div className="flex gap-1.5">
-                {TIMESLOT_COLORS.map(c => (
+                {TIMESLOT_COLORS.map((c) => (
                   <button
                     key={c.v}
                     onClick={() => update(t.id, 'color', c.v)}
@@ -617,49 +987,77 @@ function TimeslotsStep({ timeslots, setTimeslots }: TimeslotsStepProps) {
   );
 }
 
+function emptyTimeslotRow(): TimeslotRow {
+  return { id: nextLocalId(), name: '', durationMinutes: 30, color: 'teal' };
+}
+
+// ---------------------------------------------------------------------------
+// Share step
+// ---------------------------------------------------------------------------
+
 interface ShareStepProps {
-  departments: Department[];
-  seats: Seat[];
-  invites: Invite[];
   orgName: string;
 }
 
 function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-function ShareStep({ departments, seats, invites, orgName }: ShareStepProps) {
-  const [copied, setCopied] = useState(false);
+function ShareStep({ orgName }: ShareStepProps) {
+  const { copy, copied } = useCopy();
+  const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
+  const [seats, setSeats] = useState<SeatResponse[]>([]);
+  const [timeslots, setTimeslots] = useState<TimeslotTypeResponse[]>([]);
+  const [invitesCount, setInvitesCount] = useState(0);
 
-  const handleCopy = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [deps, sts, tts, invs] = await Promise.all([
+          listDepartments(),
+          listSeats(),
+          listTimeslotTypes(),
+          import('@/services/organisationApi').then((m) => m.getInvitations()),
+        ]);
+        if (cancelled) return;
+        setDepartments(deps.data);
+        setSeats(sts.data);
+        setTimeslots(tts.data);
+        setInvitesCount(invs.data.length);
+      } catch {
+        // Share screen is decorative; failing silently is OK.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const teamCount = invites.filter(i => i.email).length;
-  const deptNames = departments.map(d => d.name).filter(Boolean).join(', ');
+  const deptNames = departments.map((d) => d.name).filter(Boolean).join(', ');
   const slug = slugify(orgName) || 'your-organisation';
+  const portalUrl = `https://queueflow.io/q/${slug}`;
+  const handleCopy = () => void copy(portalUrl);
 
   const summaryItems: [string, string, IconName][] = [
     ['1 organisation', orgName, 'building'],
-    [`${departments.length} department${departments.length !== 1 ? 's' : ''}`, deptNames || 'None', 'grid'],
-    [`${seats.length} seats, ${teamCount} team members`, 'All ready to claim', 'users'],
+    [
+      `${departments.length} department${departments.length !== 1 ? 's' : ''}`,
+      deptNames || 'None',
+      'grid',
+    ],
+    [
+      `${seats.length} seats, ${invitesCount} team members`,
+      timeslots.length > 0 ? `${timeslots.length} service${timeslots.length !== 1 ? 's' : ''} configured` : 'All ready to claim',
+      'users',
+    ],
   ];
 
   return (
     <Card padding={28}>
       <div className="grid items-center gap-7" style={{ gridTemplateColumns: 'auto 1fr' }}>
-        <QRPlaceholder size={180} seed={slug} />
+        <QRCode size={180} value={portalUrl} />
         <div>
           <Pill tone="teal" dot>Your portal is live</Pill>
-          <h3
-            className="text-[18px] font-medium mt-2.5 mb-1.5"
-            style={{ letterSpacing: '-0.015em' }}
-          >
+          <h3 className="text-[18px] font-medium mt-2.5 mb-1.5" style={{ letterSpacing: '-0.015em' }}>
             Anyone with this link can join your queue.
           </h3>
           <p className="m-0 text-ink-3 text-[13.5px]">
@@ -667,9 +1065,7 @@ function ShareStep({ departments, seats, invites, orgName }: ShareStepProps) {
           </p>
           <div className="flex items-center gap-2.5 mt-[18px] px-3 py-2.5 bg-surface-2 border border-line rounded-[8px]">
             <Icon name="link" size={14} className="text-ink-3" />
-            <span className="mono flex-1 text-[12.5px] text-ink">
-              queueflow.io/q/{slug}
-            </span>
+            <span className="mono flex-1 text-[12.5px] text-ink">queueflow.io/q/{slug}</span>
             <Button
               variant="ghost"
               size="sm"

@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { createBrowserRouter, Navigate, useNavigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AppLayout from '@/layouts/app-layout'
 import GuestLayout from '@/layouts/guest-layout'
 import { RouteLoadingSkeleton } from '@/components/ui'
@@ -94,11 +94,26 @@ function OrgUserClaimRoute() {
 }
 function ClientPhoneRoute() {
   const navigate = useNavigate()
-  return <ClientPhoneScreen onContinue={() => navigate('/client/otp')} />
+  return (
+    <ClientPhoneScreen
+      onContinue={(phone) => navigate('/client/otp', { state: { phone } })}
+    />
+  )
 }
 function ClientOTPRoute() {
   const navigate = useNavigate()
-  return <ClientOTPScreen onContinue={() => navigate('/client/details')} onBack={() => navigate('/client')} />
+  const location = useLocation()
+  const phone = (location.state as { phone?: string } | null)?.phone
+  if (!phone) return <Navigate to="/client" replace />
+  return (
+    <ClientOTPScreen
+      phone={phone}
+      onContinue={({ isNewClient }) =>
+        navigate(isNewClient ? '/client/details' : '/client/slots', { replace: true })
+      }
+      onBack={() => navigate('/client')}
+    />
+  )
 }
 function ClientNewDetailsRoute() {
   const navigate = useNavigate()

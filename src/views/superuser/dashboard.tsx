@@ -1,17 +1,17 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icon, Button, Card, Pill, Avatar, Kpi, QRPlaceholder } from '@/components/ui';
-import { Sidebar, TopBar } from '@/components/layout';
+import { ProfileMenu, Sidebar, TopBar } from '@/components/layout';
 import { agoLabel } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/authStore';
+import { useClientAuthStore } from '@/stores/clientAuthStore';
 import type { SidebarNavItem } from '@/types';
-import {
-  OrgUsersView,
-  SeatsView,
-  TimeslotsView,
-  ClientLinksView,
-  AnalyticsView,
-} from './management';
+import { OrgUsersView } from './org-users';
+import { SeatsView } from './seats';
+import { TimeslotsView } from './timeslot-types';
+import { SettingsView } from './settings';
+import { ClientLinksView, AnalyticsView } from './management';
 
 const SU_NAV: SidebarNavItem[] = [
   { id: 'dashboard', label: 'Dashboard',           icon: 'grid' },
@@ -96,6 +96,18 @@ export function SuperUserDashboard({
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const active = PATH_TO_NAV[pathname] ?? initialPage;
+  const fullName = useAuthStore((s) => s.fullName);
+  const email = useAuthStore((s) => s.email);
+  const role = useAuthStore((s) => s.role);
+  const organisationName = useAuthStore((s) => s.organisationName);
+  const clearAuth = useAuthStore((s) => s.clear);
+  const clearClientAuth = useClientAuthStore((s) => s.clear);
+
+  const handleLogout = () => {
+    clearAuth();
+    clearClientAuth();
+    navigate('/login', { replace: true });
+  };
   const setActive = (id: string) => {
     const path = NAV_PATHS[id];
     if (path) navigate(path);
@@ -116,18 +128,32 @@ export function SuperUserDashboard({
         items={SU_NAV}
         active={active}
         onSelect={setActive}
+        orgName={organisationName ?? undefined}
         footer={
-          <button
-            onClick={() => onPersona?.('orguser-claim')}
-            className="flex items-center gap-2.5 w-full border-0 bg-transparent px-1 py-1.5 cursor-pointer rounded-[6px] text-ink-2 text-left hover:bg-surface-2"
-          >
-            <Avatar name="Thandi Mbeki" size={26} active />
-            <div className="flex-1 min-w-0">
-              <div className="text-[12.5px] font-medium text-ink">Thandi Mbeki</div>
-              <div className="text-[11px] text-ink-3">Owner · Super user</div>
-            </div>
-            <Icon name="dotsH" size={14} className="text-ink-3" />
-          </button>
+          <ProfileMenu
+            fullName={fullName ?? ''}
+            email={email}
+            role={role}
+            items={[
+              ...(role === 'super_user'
+                ? [
+                    {
+                      id: 'persona',
+                      label: 'Switch to org user view',
+                      icon: 'refresh' as const,
+                      onSelect: () => onPersona?.('orguser-claim'),
+                    },
+                  ]
+                : []),
+              {
+                id: 'logout',
+                label: 'Sign out',
+                icon: 'logout' as const,
+                tone: 'danger' as const,
+                onSelect: handleLogout,
+              },
+            ]}
+          />
         }
       />
 
@@ -139,7 +165,7 @@ export function SuperUserDashboard({
         {active === 'links'     && <ClientLinksView onOpenClientPortal={onOpenClientPortal} />}
         {active === 'analytics' && <AnalyticsView />}
         {active === 'queues'    && <QueuesPlaceholder />}
-        {active === 'settings'  && <SettingsPlaceholder />}
+        {active === 'settings'  && <SettingsView />}
         {active === 'billing'   && <BillingPlaceholder />}
       </main>
     </div>
@@ -153,42 +179,6 @@ function QueuesPlaceholder() {
       <div className="flex-1 overflow-auto p-6 qf-scroll">
         <Card style={{ padding: 32, textAlign: 'center' }} className="text-ink-3">
           Org-wide queues view — see the per-seat tiles on the Dashboard.
-        </Card>
-      </div>
-    </>
-  );
-}
-
-function SettingsPlaceholder() {
-  const rows: [string, string][] = [
-    ['Organization name',     'Bryanston Family Practice'],
-    ['Industry',              'Healthcare'],
-    ['Timezone',              'Africa/Johannesburg (UTC+2)'],
-    ['Soft-hold duration',    '15 minutes'],
-    ['Delay-alert threshold', '10 minutes behind schedule'],
-    ['SMS sender ID',         'BFP Clinic'],
-  ];
-
-  return (
-    <>
-      <TopBar title="Settings" subtitle="Organization-level configuration." />
-      <div className="flex-1 overflow-auto p-6 qf-scroll" style={{ maxWidth: 720 }}>
-        <Card padding={0}>
-          {rows.map(([k, v], i) => (
-            <div
-              key={k}
-              className={cn(
-                'px-[18px] py-3.5 flex items-center gap-3',
-                i < rows.length - 1 && 'border-b border-line',
-              )}
-            >
-              <div className="flex-1">
-                <div className="text-[13px] font-medium">{k}</div>
-                <div className="text-[12px] text-ink-3">{v}</div>
-              </div>
-              <Button variant="ghost" size="sm" icon="pencil">Edit</Button>
-            </div>
-          ))}
         </Card>
       </div>
     </>
