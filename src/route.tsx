@@ -4,8 +4,10 @@ import AppLayout from '@/layouts/app-layout'
 import GuestLayout from '@/layouts/guest-layout'
 import { RouteLoadingSkeleton } from '@/components/ui'
 
-// Marketing
+// Landing 
 const LandingScreen     = lazy(() => import('@/views/marketing/landing').then(m => ({ default: m.LandingScreen })))
+
+// Auth
 const SignUpScreen       = lazy(() => import('@/views/marketing/sign-up').then(m => ({ default: m.SignUpScreen })))
 const LoginScreen        = lazy(() => import('@/views/marketing/login').then(m => ({ default: m.LoginScreen })))
 const AcceptInviteScreen = lazy(() => import('@/views/marketing/accept-invite').then(m => ({ default: m.AcceptInviteScreen })))
