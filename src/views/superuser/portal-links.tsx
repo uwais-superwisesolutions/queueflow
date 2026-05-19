@@ -11,6 +11,7 @@ import {
   SkeletonBox,
   SkeletonLine,
   TextInput,
+  useConfirm,
 } from '@/components/ui';
 import { TopBar } from '@/components/layout';
 import { cn } from '@/lib/utils';
@@ -48,6 +49,7 @@ export function PortalLinksView({ onOpenClientPortal }: PortalLinksViewProps = {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const confirm = useConfirm();
 
   const deptNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -86,7 +88,13 @@ export function PortalLinksView({ onOpenClientPortal }: PortalLinksViewProps = {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this link? Anyone with the URL will lose access.')) return;
+    const ok = await confirm({
+      title: 'Delete this portal link?',
+      body: 'Anyone with this URL will lose access. You can always generate another.',
+      confirmLabel: 'Delete link',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deletePortalLink(id);

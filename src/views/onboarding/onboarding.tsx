@@ -193,7 +193,7 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
   }, [step]);
 
   return (
-    <div className="bg-bg flex flex-col" style={{ minHeight: 'calc(100vh - 48px)' }}>
+    <div className="bg-bg flex flex-col" style={{ minHeight: '100vh' }}>
       <header className="px-8 py-5 border-b border-line bg-surface flex items-center gap-6">
         <QFLogo size={18} />
         <span className="text-[12px] text-ink-3">{orgDisplayName}</span>

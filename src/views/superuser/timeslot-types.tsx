@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react';
-import { Button, Card, Field, Icon, Modal, Pill, TextInput } from '@/components/ui';
+import { Button, Card, Field, Icon, Modal, Pill, TextInput, useConfirm } from '@/components/ui';
 import { TopBar } from '@/components/layout';
 import type { TimeslotTypeResponse } from '@/types';
 import {
@@ -34,6 +34,7 @@ export function TimeslotsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const confirm = useConfirm();
 
   const reload = async () => {
     setLoading(true);
@@ -63,7 +64,13 @@ export function TimeslotsView() {
   };
 
   const remove = async (t: TimeslotTypeResponse) => {
-    if (!window.confirm(`Delete "${t.name}"? Org users will stop being able to offer this service.`)) return;
+    const ok = await confirm({
+      title: `Delete "${t.name}"?`,
+      body: 'Org users will stop being able to offer this service. Existing bookings keep their type.',
+      confirmLabel: 'Delete service',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deleteTimeslotType(t.id);

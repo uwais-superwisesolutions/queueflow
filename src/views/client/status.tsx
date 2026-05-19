@@ -1,7 +1,7 @@
  
 import { useEffect, useMemo, useState } from 'react';
 import { PhoneFrame } from '@/components/layout';
-import { Icon, Button, Card, SkeletonBox, SkeletonLine } from '@/components/ui';
+import { Icon, Button, Card, SkeletonBox, SkeletonLine, useConfirm } from '@/components/ui';
 import { useTick } from '@/hooks/use-tick';
 import { formatHMS } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -50,6 +50,7 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
   const [cancelling, setCancelling] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<number>(0);
   const scan = useMemo(() => getCachedPortalScan(), []);
+  const confirm = useConfirm();
 
   useTick(1000);
 
@@ -92,7 +93,14 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
 
   const handleCancel = async () => {
     if (!booking) return;
-    if (!window.confirm('Cancel your spot? You can re-book straight after.')) return;
+    const ok = await confirm({
+      title: 'Cancel your spot?',
+      body: 'You can always re-book another slot.',
+      confirmLabel: 'Cancel spot',
+      cancelLabel: 'Keep my spot',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setCancelling(true);
     setError(null);
     try {

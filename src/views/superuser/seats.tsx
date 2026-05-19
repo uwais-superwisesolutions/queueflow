@@ -12,7 +12,7 @@ import {
 } from '@/services/departmentApi';
 import { createSeat, deleteSeat, listSeats, updateSeat } from '@/services/seatApi';
 import { getApiErrorMessage } from '@/lib/api-error';
-import { SkeletonBox, SkeletonLine } from '@/components/ui';
+import { SkeletonBox, SkeletonLine, useConfirm } from '@/components/ui';
 import { EmptyState, SeatGridSkeleton, SectionError } from './shared';
 
 const DEPT_PALETTE = ['var(--teal)', 'var(--blue)', 'var(--amber)', 'var(--coral)', 'var(--success)'];
@@ -26,6 +26,7 @@ export function SeatsView() {
 
   const [deptModal, setDeptModal] = useState<DeptModalState | null>(null);
   const [seatModal, setSeatModal] = useState<SeatModalState | null>(null);
+  const confirm = useConfirm();
 
   const reload = async () => {
     setLoading(true);
@@ -62,7 +63,13 @@ export function SeatsView() {
   }, [seats]);
 
   const onDepartmentDelete = async (id: string) => {
-    if (!window.confirm('Delete this department and all its seats?')) return;
+    const ok = await confirm({
+      title: 'Delete this department?',
+      body: 'All seats inside it will be deleted too. Active bookings on those seats lose their seat assignment.',
+      confirmLabel: 'Delete department',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deleteDepartment(id);
@@ -74,7 +81,13 @@ export function SeatsView() {
   };
 
   const onSeatDelete = async (id: string) => {
-    if (!window.confirm('Delete this seat? Any active bookings will lose their seat assignment.')) return;
+    const ok = await confirm({
+      title: 'Delete this seat?',
+      body: 'Active bookings on this seat will lose their seat assignment.',
+      confirmLabel: 'Delete seat',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deleteSeat(id);

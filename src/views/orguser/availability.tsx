@@ -11,6 +11,7 @@ import {
   SkeletonBox,
   SkeletonLine,
   TextInput,
+  useConfirm,
 } from '@/components/ui';
 import { TopBar } from '@/components/layout';
 import { cn } from '@/lib/utils';
@@ -21,7 +22,6 @@ import type {
   PatternConflict,
   PatternConflictResponse,
   PatternsResponse,
-  TimeslotTypeResponse,
 } from '@/types';
 import {
   createMyAvailabilityException,
@@ -30,12 +30,7 @@ import {
   listMyAvailabilityExceptions,
   replaceMyAvailabilityPatterns,
 } from '@/services/availabilityApi';
-import {
-  listMyTimeslotTypes,
-  listTimeslotTypes,
-  optInTimeslotType,
-  optOutTimeslotType,
-} from '@/services/timeslotTypeApi';
+import { listTimeslotTypes } from '@/services/timeslotTypeApi';
 import { getApiErrorMessage } from '@/lib/api-error';
 
 // API uses 0 = Sunday, but the UI shows Monday-first.
@@ -78,7 +73,7 @@ export function AvailabilityView() {
         <div className="h-5" />
         <Exceptions />
         <div className="h-5" />
-        <MyServices />
+        <div className="h-5" />
       </div>
     </>
   );
@@ -339,6 +334,7 @@ function Exceptions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const confirm = useConfirm();
 
   const reload = async () => {
     setLoading(true);
@@ -359,7 +355,13 @@ function Exceptions() {
   }, []);
 
   const remove = async (id: string) => {
-    if (!window.confirm('Delete this exception?')) return;
+    const ok = await confirm({
+      title: 'Delete this exception?',
+      body: 'Your availability for that date returns to your recurring weekly pattern.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deleteMyAvailabilityException(id);
@@ -584,113 +586,6 @@ function ExceptionModal({
         )}
       </div>
     </Modal>
-  );
-}
-
-// ─────────────────────────────────────────────────
-// My services (timeslot opt-ins)
-// ─────────────────────────────────────────────────
-
-function MyServices() {
-  const [all, setAll] = useState<TimeslotTypeResponse[]>([]);
-  const [mine, setMine] = useState<TimeslotTypeResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingId, setPendingId] = useState<string | null>(null);
-
-  const reload = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [allRes, mineRes] = await Promise.all([listTimeslotTypes(), listMyTimeslotTypes()]);
-      setAll(allRes.data);
-      setMine(mineRes.data);
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Could not load services.'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void reload();
-  }, []);
-
-  const mineIds = useMemo(() => new Set(mine.map((t) => t.id)), [mine]);
-
-  const toggle = async (t: TimeslotTypeResponse) => {
-    setError(null);
-    setPendingId(t.id);
-    try {
-      if (mineIds.has(t.id)) {
-        await optOutTimeslotType(t.id);
-      } else {
-        await optInTimeslotType(t.id);
-      }
-      await reload();
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Could not update service.'));
-    } finally {
-      setPendingId(null);
-    }
-  };
-
-  return (
-    <Card padding={0}>
-      <div className="px-[18px] py-[14px] border-b border-line flex items-center gap-3">
-        <Icon name="clock" size={15} className="text-ink-3" />
-        <h2 className="m-0 text-[14px] font-medium">My services</h2>
-        <span className="text-[12px] text-ink-3">Toggle which services you personally offer.</span>
-      </div>
-      <div className="p-2">
-        {error && (
-          <div className="text-coral text-[12.5px] px-3 pt-2" role="alert">
-            <Icon name="alert" size={12} /> {error}
-          </div>
-        )}
-        {loading && all.length === 0 ? (
-          <ListLoadingSkeleton rows={3} />
-        ) : all.length === 0 ? (
-          <div className="px-3 py-6 text-[13px] text-ink-3 text-center">
-            Your super user hasn't added any services yet.
-          </div>
-        ) : (
-          all.map((t, i) => {
-            const isOn = mineIds.has(t.id);
-            return (
-              <div
-                key={t.id}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5',
-                  i < all.length - 1 && 'border-b border-line',
-                )}
-              >
-                <span
-                  className="w-7 h-7 rounded-[8px] inline-flex items-center justify-center text-white flex-none"
-                  style={{ background: t.color ?? '#0f6e56' }}
-                >
-                  <Icon name="clock" size={12} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium truncate">{t.name}</div>
-                  <div className="mono text-[11.5px] text-ink-3">{t.durationMinutes} min</div>
-                </div>
-                {!t.isActive && <Pill tone="neutral">Hidden</Pill>}
-                <Button
-                  variant={isOn ? 'secondary' : 'primary'}
-                  size="sm"
-                  onClick={() => toggle(t)}
-                  disabled={pendingId === t.id}
-                  icon={isOn ? 'check' : 'plus'}
-                >
-                  {isOn ? 'Offering' : 'Offer this'}
-                </Button>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </Card>
   );
 }
 

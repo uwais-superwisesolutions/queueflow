@@ -1,5 +1,7 @@
  
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { AxiosError } from 'axios';
 import { Icon, Pill, Avatar, SkeletonBox, SkeletonLine } from '@/components/ui';
 import { ProfileMenu, QFLogo } from '@/components/layout';
 import { cn } from '@/lib/utils';
@@ -35,6 +37,8 @@ interface ClaimTile {
 }
 
 export function OrgUserClaimScreen({ onClaim, onSignOut }: OrgUserClaimScreenProps) {
+  const location = useLocation();
+  const forceClaim = new URLSearchParams(location.search).get('force') === '1';
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
   const role = useAuthStore((s) => s.role);
@@ -56,13 +60,20 @@ export function OrgUserClaimScreen({ onClaim, onSignOut }: OrgUserClaimScreenPro
       setLoading(true);
       setError(null);
       try {
-        // If we already have an active shift, jump straight to the queue.
-        const myAssignment = await getMySeatAssignment();
-        if (cancelled) return;
-        if (myAssignment.data && !myAssignment.data.endedAt) {
-          // Find the seat name so the route wrapper can pass it to /queue if needed.
-          onClaim('');
-          return;
+        if (!forceClaim) {
+          // If we already have an active shift, jump straight to the queue.
+          try {
+            const myAssignment = await getMySeatAssignment();
+            if (cancelled) return;
+            if (myAssignment.data && !myAssignment.data.endedAt) {
+              // Find the seat name so the route wrapper can pass it to /queue if needed.
+              onClaim('');
+              return;
+            }
+          } catch (err) {
+            const status = err instanceof AxiosError ? err.response?.status : undefined;
+            if (status && status !== 404) throw err;
+          }
         }
 
         const [seatsRes, deptsRes, sessionsRes] = await Promise.all([
@@ -83,7 +94,7 @@ export function OrgUserClaimScreen({ onClaim, onSignOut }: OrgUserClaimScreenPro
     return () => {
       cancelled = true;
     };
-  }, [onClaim]);
+  }, [onClaim, forceClaim]);
 
   const deptName = useMemo(() => {
     const m = new Map<string, string>();

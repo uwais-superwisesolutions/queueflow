@@ -11,6 +11,7 @@ import {
   SkeletonBox,
   SkeletonLine,
   TextInput,
+  useConfirm,
 } from '@/components/ui';
 import { ProfileMenu, TopBar } from '@/components/layout';
 import { useTick } from '@/hooks/use-tick';
@@ -92,6 +93,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number>(0);
+  const confirm = useConfirm();
 
   // Live elapsed-time tick for the "In service" timer.
   useTick(1000);
@@ -119,8 +121,17 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
       setLoading(true);
       setError(null);
       try {
-        const [assignmentRes, queueRes, ttRes, seatsRes] = await Promise.all([
-          getMySeatAssignment(),
+        let assignmentRes: { data: SeatAssignmentResponse | null } = { data: null };
+        try {
+          assignmentRes = await getMySeatAssignment();
+        } catch (err) {
+          const status = err instanceof Error && 'response' in err
+            ? (err as { response?: { status?: number } }).response?.status
+            : undefined;
+          if (status && status !== 404) throw err;
+        }
+
+        const [queueRes, ttRes, seatsRes] = await Promise.all([
           getQueue(),
           listTimeslotTypes(),
           listSeats(),
@@ -189,16 +200,29 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
   const handleStart = (b: BookingResponse) => handleAction(b.id, () => startBooking(b.id));
   const handleComplete = (b: BookingResponse) => handleAction(b.id, () => completeBooking(b.id));
   const handleNoShow = (b: BookingResponse) => handleAction(b.id, () => noShowBooking(b.id));
-  const handleCancel = (b: BookingResponse) => {
-    if (!window.confirm('Cancel this booking? The client will be notified.')) return;
+  const handleCancel = async (b: BookingResponse) => {
+    const ok = await confirm({
+      title: 'Cancel this booking?',
+      body: 'The client will be notified by SMS that the appointment was cancelled.',
+      confirmLabel: 'Cancel booking',
+      cancelLabel: 'Keep it',
+      tone: 'danger',
+    });
+    if (!ok) return;
     return handleAction(b.id, () => cancelBooking(b.id));
   };
 
   const handleEndShift = async () => {
-    if (queue.checkedIn.length + queue.scheduled.length + queue.pendingApproval.length > 0) {
-      const ok = window.confirm(
-        `${queue.checkedIn.length + queue.scheduled.length + queue.pendingApproval.length} client(s) are still in your queue. End shift anyway?`,
-      );
+    const stillInQueue =
+      queue.checkedIn.length + queue.scheduled.length + queue.pendingApproval.length;
+    if (stillInQueue > 0) {
+      const ok = await confirm({
+        title: 'End your shift?',
+        body: `${stillInQueue} client${stillInQueue === 1 ? ' is' : 's are'} still in your queue. The system will try to reassign them — anyone we can't reassign will be notified that their booking was cancelled.`,
+        confirmLabel: 'End shift anyway',
+        cancelLabel: 'Stay on shift',
+        tone: 'danger',
+      });
       if (!ok) return;
     }
     setEndingShift(true);
@@ -333,132 +357,139 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
           <Pill tone="neutral">{totalInQueue} active</Pill>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <QueueSection
-            title="Pending approval"
-            count={queue.pendingApproval.length}
-            accent="amber"
-            empty="No requests waiting for you."
-          >
-            {queue.pendingApproval.map((b) => (
-              <PendingCard
-                key={b.id}
-                booking={b}
-                timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
-                disabled={actingId === b.id}
-                onApprove={() => handleApprove(b)}
-                onReject={() => setRejectingId(b.id)}
-              />
-            ))}
-          </QueueSection>
+        <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 320px', alignItems: 'start' }}>
+          <div className="flex flex-col gap-4">
+            <QueueSection
+              title="Pending approval"
+              count={queue.pendingApproval.length}
+              accent="amber"
+              empty="No requests waiting for you."
+            >
+              {queue.pendingApproval.map((b) => (
+                <PendingCard
+                  key={b.id}
+                  booking={b}
+                  timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  disabled={actingId === b.id}
+                  onApprove={() => handleApprove(b)}
+                  onReject={() => setRejectingId(b.id)}
+                />
+              ))}
+            </QueueSection>
 
-          <QueueSection
-            title="In service now"
-            count={queue.inService.length}
-            accent="blue"
-            empty="Nobody is in service right now."
-          >
-            {queue.inService.map((b) => (
-              <InServiceCard
-                key={b.id}
-                booking={b}
-                timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
-                disabled={actingId === b.id}
-                onComplete={() => handleComplete(b)}
-                onNoShow={() => handleNoShow(b)}
-              />
-            ))}
-          </QueueSection>
+            <QueueSection
+              title="In service now"
+              count={queue.inService.length}
+              accent="blue"
+              empty="Nobody is in service right now."
+            >
+              {queue.inService.map((b) => (
+                <InServiceCard
+                  key={b.id}
+                  booking={b}
+                  timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  disabled={actingId === b.id}
+                  onComplete={() => handleComplete(b)}
+                  onNoShow={() => handleNoShow(b)}
+                />
+              ))}
+            </QueueSection>
 
-          <QueueSection
-            title="Checked in"
-            count={queue.checkedIn.length}
-            accent="teal"
-            empty="No clients in the waiting room."
-            action={
-              queue.checkedIn.length > 0 ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon="arrowR"
-                  onClick={() => handleStart(queue.checkedIn[0])}
-                  disabled={actingId === queue.checkedIn[0]?.id}
-                >
-                  Call next
-                </Button>
-              ) : undefined
-            }
-          >
-            {queue.checkedIn.map((b) => (
-              <BookingRow
-                key={b.id}
-                booking={b}
-                timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
-                accent="teal"
-                disabled={actingId === b.id}
-                actions={
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon="user"
-                      onClick={() => handleStart(b)}
-                      disabled={actingId === b.id}
-                    >
-                      Start
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleNoShow(b)}
-                      disabled={actingId === b.id}
-                    >
-                      No-show
-                    </Button>
-                  </>
-                }
-              />
-            ))}
-          </QueueSection>
+            <QueueSection
+              title="Checked in"
+              count={queue.checkedIn.length}
+              accent="teal"
+              empty="No clients in the waiting room."
+              action={
+                queue.checkedIn.length > 0 ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon="arrowR"
+                    onClick={() => handleStart(queue.checkedIn[0])}
+                    disabled={actingId === queue.checkedIn[0]?.id}
+                  >
+                    Call next
+                  </Button>
+                ) : undefined
+              }
+            >
+              {queue.checkedIn.map((b) => (
+                <BookingRow
+                  key={b.id}
+                  booking={b}
+                  timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  accent="teal"
+                  disabled={actingId === b.id}
+                  actions={
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="user"
+                        onClick={() => handleStart(b)}
+                        disabled={actingId === b.id}
+                      >
+                        Start
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleNoShow(b)}
+                        disabled={actingId === b.id}
+                      >
+                        No-show
+                      </Button>
+                    </>
+                  }
+                />
+              ))}
+            </QueueSection>
 
-          <QueueSection
-            title="Scheduled today"
-            count={queue.scheduled.length}
-            accent="neutral"
-            empty="No upcoming bookings today."
-          >
-            {queue.scheduled.map((b) => (
-              <BookingRow
-                key={b.id}
-                booking={b}
-                timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
-                accent="neutral"
-                disabled={actingId === b.id}
-                actions={
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon="check"
-                      onClick={() => handleCheckIn(b)}
-                      disabled={actingId === b.id}
-                    >
-                      Check in
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon="trash"
-                      onClick={() => handleCancel(b)}
-                      disabled={actingId === b.id}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                }
-              />
-            ))}
-          </QueueSection>
+            <QueueSection
+              title="Scheduled today"
+              count={queue.scheduled.length}
+              accent="neutral"
+              empty="No upcoming bookings today."
+            >
+              {queue.scheduled.map((b) => (
+                <BookingRow
+                  key={b.id}
+                  booking={b}
+                  timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  accent="neutral"
+                  disabled={actingId === b.id}
+                  actions={
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="check"
+                        onClick={() => handleCheckIn(b)}
+                        disabled={actingId === b.id}
+                      >
+                        Check in
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="trash"
+                        onClick={() => handleCancel(b)}
+                        disabled={actingId === b.id}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  }
+                />
+              ))}
+            </QueueSection>
+          </div>
+
+          <aside className="flex flex-col gap-3.5" style={{ position: 'sticky', top: 16 }}>
+            <NotificationPanel />
+            <AtGlancePanel />
+          </aside>
         </div>
       </main>
 
@@ -768,3 +799,111 @@ function QueueSkeleton() {
   );
 }
 
+function NotificationPanel() {
+  const items = [
+    {
+      tone: 'coral',
+      title: 'Running 12 min behind schedule',
+      body: 'Delay alert sent to 3 clients in your queue.',
+      time: '2m ago',
+    },
+    {
+      tone: 'amber',
+      title: 'New request received',
+      body: 'Requested 15:00 · Consult.',
+      time: '5m ago',
+    },
+    {
+      tone: 'blue',
+      title: 'Client checked in',
+      body: 'Arrived in waiting room.',
+      time: '14m ago',
+    },
+  ];
+
+  return (
+    <Card padding={0}>
+      <div className="px-4 py-3 border-b border-line flex items-center gap-2">
+        <span className="qf-live-dot" />
+        <span className="text-[12.5px] font-medium">Notifications</span>
+        <Pill tone="coral" className="ml-auto">2 new</Pill>
+      </div>
+      <div>
+        {items.map((n, i) => (
+          <div
+            key={n.title}
+            className={cn(
+              'px-4 py-2.5 flex gap-2.5',
+              i < items.length - 1 && 'border-b border-line',
+            )}
+          >
+            <FeedKindBadge tone={n.tone} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[12.5px] font-medium">{n.title}</div>
+              <div className="text-[11.5px] text-ink-3 mt-0.5">{n.body}</div>
+              <div className="text-[11px] text-ink-4 mt-1">{n.time}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function AtGlancePanel() {
+  return (
+    <Card padding={14}>
+      <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold">
+        Today at a glance
+      </div>
+      <div className="grid gap-3 mt-2.5" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <MiniStat label="Completed" value="6" tone="success" />
+        <MiniStat label="No-shows" value="1" tone="ink" />
+        <MiniStat label="Avg consult" value="22m" tone="ink" />
+        <MiniStat label="Behind" value="+12m" tone="coral" />
+      </div>
+    </Card>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: 'success' | 'coral' | 'ink';
+}) {
+  const color =
+    tone === 'success'
+      ? 'var(--success)'
+      : tone === 'coral'
+        ? 'var(--coral-2)'
+        : 'var(--ink)';
+  return (
+    <div>
+      <div className="text-[11.5px] text-ink-3">{label}</div>
+      <div className="tnum text-[20px] font-medium" style={{ color, letterSpacing: '-0.015em' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function FeedKindBadge({ tone }: { tone: 'coral' | 'amber' | 'blue' }) {
+  const map = {
+    coral: { icon: 'alert', bg: 'var(--coral-tint)', fg: 'var(--coral-2)' },
+    amber: { icon: 'bell', bg: 'var(--amber-tint)', fg: 'var(--amber)' },
+    blue: { icon: 'info', bg: 'var(--blue-tint)', fg: 'var(--blue)' },
+  } as const;
+  const m = map[tone];
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-[6px] flex-none"
+      style={{ width: 22, height: 22, background: m.bg, color: m.fg }}
+    >
+      <Icon name={m.icon} size={12} />
+    </span>
+  );
+}

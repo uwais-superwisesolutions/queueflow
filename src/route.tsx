@@ -22,6 +22,7 @@ const SuperUserDashboard = lazy(() => import('@/views/superuser/dashboard').then
 const OrgUserClaimScreen = lazy(() => import('@/views/orguser/seat-claim').then(m => ({ default: m.OrgUserClaimScreen })))
 const OrgUserQueueScreen = lazy(() => import('@/views/orguser/live-queue').then(m => ({ default: m.OrgUserQueueScreen })))
 const AvailabilityView   = lazy(() => import('@/views/orguser/availability').then(m => ({ default: m.AvailabilityView })))
+const OrgUserDashboard   = lazy(() => import('@/views/orguser/dashboard').then(m => ({ default: m.OrgUserDashboard })))
 
 // Client
 const ClientPhoneScreen       = lazy(() => import('@/views/client/phone').then(m => ({ default: m.ClientPhoneScreen })))
@@ -65,7 +66,7 @@ function LoginRoute() {
       onSubmit={({ role, onboardingComplete }) => {
         if (role === null) navigate('/accept-invite')
         else if (role === 'super_user' && !onboardingComplete) navigate('/onboarding')
-        else if (role === 'org_user') navigate('/claim')
+        else if (role === 'org_user') navigate('/org')
         else navigate('/dashboard')
       }}
       onSignUp={() => navigate('/signup')}
@@ -79,7 +80,7 @@ function AcceptInviteRoute() {
     <AcceptInviteScreen
       onSubmit={({ role }) => {
         if (role === 'super_user') navigate('/dashboard')
-        else navigate('/claim')
+        else navigate('/org')
       }}
     />
   )
@@ -102,6 +103,16 @@ function OrgUserQueueRoute() {
   return (
     <OrgUserQueueScreen
       onShiftEnded={() => navigate('/claim', { replace: true })}
+      onSignOut={() => navigate('/login', { replace: true })}
+    />
+  )
+}
+function OrgUserDashboardRoute({ initialPage = 'queue' }: { initialPage?: string }) {
+  const navigate = useNavigate()
+  return (
+    <OrgUserDashboard
+      initialPage={initialPage}
+      onClaimSeat={() => navigate('/claim')}
       onSignOut={() => navigate('/login', { replace: true })}
     />
   )
@@ -196,7 +207,7 @@ function DashboardRoute({ initialPage }: { initialPage: string }) {
   return (
     <SuperUserDashboard
       initialPage={initialPage}
-      onPersona={() => navigate('/claim')}
+      onPersona={() => navigate('/claim?force=1')}
       onOpenClientPortal={() => navigate('/client')}
     />
   )
@@ -233,9 +244,13 @@ const router = createBrowserRouter([
       { path: '/dashboard/billing',    element: wrap(<DashboardRoute initialPage="billing" />) },
 
       // OrgUser
-      { path: '/claim',        element: wrap(<OrgUserClaimRoute />) },
-      { path: '/queue',        element: wrap(<OrgUserQueueRoute />) },
-      { path: '/availability', element: wrap(<AvailabilityView />) },
+      { path: '/org',            element: wrap(<OrgUserDashboardRoute initialPage="queue" />) },
+      { path: '/claim',          element: wrap(<OrgUserClaimRoute />) },
+      { path: '/queue',          element: wrap(<OrgUserDashboardRoute initialPage="queue" />) },
+      { path: '/availability',   element: wrap(<OrgUserDashboardRoute initialPage="availability" />) },
+      { path: '/timeconfig',     element: wrap(<OrgUserDashboardRoute initialPage="timeconfig" />) },
+      { path: '/notifications',  element: wrap(<OrgUserDashboardRoute initialPage="notifications" />) },
+      { path: '/profile',        element: wrap(<OrgUserDashboardRoute initialPage="profile" />) },
 
       // Client portal
       { path: '/client',            element: wrap(<ClientPhoneRoute />) },

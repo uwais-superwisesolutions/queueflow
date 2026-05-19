@@ -103,7 +103,7 @@ export function SuperUserDashboard({
   return (
     <div
       className="flex overflow-hidden"
-      style={{ height: 'calc(100vh - 48px)' }}
+      style={{ height: '100vh' }}
     >
       <Sidebar
         items={SU_NAV}
@@ -122,7 +122,7 @@ export function SuperUserDashboard({
                       id: 'persona',
                       label: 'Switch to org user view',
                       icon: 'refresh' as const,
-                      onSelect: () => onPersona?.('orguser-claim'),
+                       onSelect: () => onPersona?.('orguser-claim'),
                     },
                   ]
                 : []),

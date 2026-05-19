@@ -14,6 +14,10 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface RefreshTokenPayload {
+  refreshToken: string;
+}
+
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
