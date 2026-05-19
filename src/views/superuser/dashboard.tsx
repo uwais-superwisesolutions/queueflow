@@ -1,17 +1,28 @@
-import { useState, useEffect, type ReactNode } from 'react';
+ 
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Icon, Button, Card, Pill, Avatar, Kpi, QRPlaceholder } from '@/components/ui';
+import { Icon, Button, Card, Pill, Avatar, Kpi, SkeletonBox, SkeletonLine } from '@/components/ui';
 import { ProfileMenu, Sidebar, TopBar } from '@/components/layout';
 import { agoLabel } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useClientAuthStore } from '@/stores/clientAuthStore';
-import type { SidebarNavItem } from '@/types';
+import { getApiErrorMessage } from '@/lib/api-error';
+import { listDepartments } from '@/services/departmentApi';
+import { listSeats } from '@/services/seatApi';
+import { listActiveSessions } from '@/services/sessionApi';
+import type {
+  ActiveSessionResponse,
+  DepartmentResponse,
+  SeatResponse,
+  SidebarNavItem,
+} from '@/types';
 import { OrgUsersView } from './org-users';
 import { SeatsView } from './seats';
 import { TimeslotsView } from './timeslot-types';
 import { SettingsView } from './settings';
-import { ClientLinksView, AnalyticsView } from './management';
+import { PortalLinksView } from './portal-links';
+import { AnalyticsView } from './management';
 
 const SU_NAV: SidebarNavItem[] = [
   { id: 'dashboard', label: 'Dashboard',           icon: 'grid' },
@@ -42,44 +53,14 @@ const PATH_TO_NAV: Record<string, string> = Object.fromEntries(
   Object.entries(NAV_PATHS).map(([id, path]) => [path, id]),
 );
 
-interface DashSeat {
-  id: number;
+/** Derived seat tile combining a SeatResponse + (maybe) the org_member currently assigned to it. */
+interface SeatTile {
+  id: string;
   name: string;
-  dept: string;
-  user: string | null;
-  role: string | null;
-  active: boolean;
-  queue: number;
-  serving: string | null;
-  alert?: boolean;
-  idle?: boolean;
+  department: string;
+  session: ActiveSessionResponse | null;
 }
 
-const DASH_SEATS: DashSeat[] = [
-  { id: 1, name: 'Consultation room 1', dept: 'General Practice', user: 'Amara Okonkwo',  role: 'Doctor',  active: true,  queue: 5, serving: 'Sarah Mokoena' },
-  { id: 2, name: 'Consultation room 2', dept: 'General Practice', user: 'Sipho Dlamini',  role: 'Doctor',  active: true,  queue: 3, serving: 'Jabu Khumalo' },
-  { id: 3, name: 'Consultation room 3', dept: 'General Practice', user: null,             role: null,      active: false, queue: 4, serving: null, alert: true },
-  { id: 4, name: 'Dental chair A',      dept: 'Dental',           user: 'Naledi Brown',   role: 'Dentist', active: true,  queue: 2, serving: 'Michael v.d. Berg' },
-  { id: 5, name: 'Dental chair B',      dept: 'Dental',           user: 'Khaya Mthembu',  role: 'Dentist', active: true,  queue: 1, serving: null, idle: true },
-  { id: 6, name: 'Peds room',           dept: 'Pediatrics',       user: null,             role: null,      active: false, queue: 0, serving: null },
-  { id: 7, name: 'Triage desk',         dept: 'General Practice', user: 'Lerato Smith',   role: 'Nurse',   active: true,  queue: 8, serving: 'Anwar Pillay' },
-];
-
-interface FeedItem {
-  t: number;
-  text: ReactNode;
-  kind: 'service' | 'request' | 'alert' | 'complete' | 'session';
-}
-
-const FEED: FeedItem[] = [
-  { t: 12,  text: <>Dr. Okonkwo started serving <b>Sarah Mokoena</b></>,            kind: 'service' },
-  { t: 73,  text: <>New booking request for <b>Chair A</b> at 15:10</>,             kind: 'request' },
-  { t: 142, text: <>Triage queue passed 8 — consider adding a seat</>,              kind: 'alert' },
-  { t: 220, text: <>Dr. Dlamini completed appointment with <b>Beth Cele</b></>,     kind: 'complete' },
-  { t: 360, text: <>Sipho Dlamini claimed <b>Consultation room 2</b></>,            kind: 'session' },
-  { t: 480, text: <>Delay alert sent to <b>3 clients</b> in Room 1's queue</>,      kind: 'alert' },
-  { t: 720, text: <>Khaya Mthembu started shift at <b>Dental chair B</b></>,        kind: 'session' },
-];
 
 interface SuperUserDashboardProps {
   onLogout?: () => void;
@@ -162,7 +143,7 @@ export function SuperUserDashboard({
         {active === 'orgusers'  && <OrgUsersView />}
         {active === 'seats'     && <SeatsView />}
         {active === 'timeslots' && <TimeslotsView />}
-        {active === 'links'     && <ClientLinksView onOpenClientPortal={onOpenClientPortal} />}
+        {active === 'links'     && <PortalLinksView onOpenClientPortal={onOpenClientPortal} />}
         {active === 'analytics' && <AnalyticsView />}
         {active === 'queues'    && <QueuesPlaceholder />}
         {active === 'settings'  && <SettingsView />}
@@ -217,19 +198,99 @@ interface DashboardBodyProps {
 }
 
 function DashboardBody({ now, setActive }: DashboardBodyProps) {
+  const [seats, setSeats] = useState<SeatResponse[]>([]);
+  const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
+  const [sessions, setSessions] = useState<ActiveSessionResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<number>(Date.now());
+
+  const refreshSessions = async () => {
+    try {
+      const resp = await listActiveSessions();
+      setSessions(resp.data.sessions);
+      setUpdatedAt(Date.now());
+    } catch {
+      // best-effort poll; keep previous data on transient errors
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [seatsRes, deptsRes, sessionsRes] = await Promise.all([
+          listSeats(),
+          listDepartments(),
+          listActiveSessions(),
+        ]);
+        if (cancelled) return;
+        setSeats([...seatsRes.data].sort((a, b) => a.displayOrder - b.displayOrder));
+        setDepartments(deptsRes.data);
+        setSessions(sessionsRes.data.sessions);
+        setUpdatedAt(Date.now());
+      } catch (err) {
+        if (!cancelled) setError(getApiErrorMessage(err, 'Could not load dashboard.'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Poll active sessions every 30s to keep the seat-claimed-by tiles live.
+  useEffect(() => {
+    const id = window.setInterval(refreshSessions, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const sessionsBySeat = useMemo(() => {
+    const m = new Map<string, ActiveSessionResponse>();
+    for (const s of sessions) m.set(s.seatId, s);
+    return m;
+  }, [sessions]);
+
+  const deptNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of departments) m.set(d.id, d.name);
+    return m;
+  }, [departments]);
+
+  const tiles: SeatTile[] = useMemo(
+    () =>
+      seats.map((s) => ({
+        id: s.id,
+        name: s.name,
+        department: deptNameById.get(s.departmentId) ?? 'Department',
+        session: sessionsBySeat.get(s.id) ?? null,
+      })),
+    [seats, sessionsBySeat, deptNameById],
+  );
+
+  const activeCount = sessions.length;
+  const totalSeats = seats.length;
+  const subtitle = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+
   return (
     <>
       <TopBar
         title="Dashboard"
-        subtitle="Tuesday, 18 May"
+        subtitle={subtitle}
         right={
           <div className="flex gap-2 items-center">
             <span className="flex items-center gap-1.5 text-[12px] text-ink-3">
               <span className="qf-live-dot" />
               Live
             </span>
-            <Button variant="ghost" icon="bell" />
-            <Button variant="secondary" icon="filter">Filter</Button>
+            <Button variant="ghost" icon="refresh" onClick={refreshSessions}>Refresh</Button>
             <Button variant="primary" icon="link" onClick={() => setActive('links')}>
               Get join link
             </Button>
@@ -237,16 +298,45 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
         }
       />
       <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '20px 24px 40px' }}>
-        <div
-          className="grid items-start gap-5"
-          style={{ gridTemplateColumns: '1fr 320px' }}
-        >
+        {error && (
+          <div
+            className="flex items-center gap-[10px] px-3.5 py-[10px] rounded-[10px] border mb-4"
+            style={{
+              background: 'var(--coral-tint)',
+              borderColor: 'color-mix(in oklab, var(--coral) 30%, transparent)',
+            }}
+            role="alert"
+          >
+            <Icon name="alert" size={14} className="text-coral" />
+            <span className="text-[12.5px]">{error}</span>
+          </div>
+        )}
+
+        <div className="grid items-start gap-5" style={{ gridTemplateColumns: '1fr 320px' }}>
           <div className="flex flex-col gap-5">
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-              <Kpi label="Active sessions"  value="4"  sub="/ 7 seats"         hint="now" />
-              <Kpi label="In queue now"     value="23" sub="across all seats"   hint="now" />
-              <Kpi label="Avg wait today"   value="24" sub="min"               hint="rolling" />
-              <Kpi label="Bookings today"   value="87" sub="of 120 capacity"   hint="so far" />
+              {loading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <Card key={i} padding={14}>
+                    <SkeletonLine w={84} h={11} />
+                    <SkeletonLine w={48} h={24} className="mt-2" />
+                    <SkeletonLine w={64} h={10} className="mt-2" />
+                  </Card>
+                ))
+              ) : (
+                <>
+                  <Kpi
+                    label="Active sessions"
+                    value={String(activeCount)}
+                    sub={`/ ${totalSeats} seats`}
+                    hint="now"
+                    tone={activeCount === 0 ? 'neutral' : 'teal'}
+                  />
+                  <Kpi label="In queue now" value="—" sub="across all seats" hint="not wired" />
+                  <Kpi label="Avg wait today" value="—" sub="min" hint="not wired" />
+                  <Kpi label="Bookings today" value="—" sub="not wired" hint="" />
+                </>
+              )}
             </div>
 
             <section>
@@ -254,16 +344,36 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
                 <h2 className="m-0 text-[14px] font-semibold" style={{ letterSpacing: '-0.005em' }}>
                   Active seats
                 </h2>
-                <Pill tone="teal" dot>Live</Pill>
+                <Pill tone="teal" dot>
+                  Live
+                </Pill>
                 <span className="flex-1" />
-                <Button variant="ghost" size="sm" icon="grid">Grid</Button>
-                <Button variant="ghost" size="sm" icon="list">List</Button>
+                <span className="text-[11.5px] text-ink-3">
+                  Updated {agoLabel(updatedAt)}
+                </span>
               </div>
               <div
                 className="grid gap-3"
                 style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
               >
-                {DASH_SEATS.map(s => <SeatCard key={s.id} seat={s} />)}
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, i) => <SeatCardSkeleton key={i} />)
+                ) : tiles.length === 0 ? (
+                  <Card padding={20} className="col-span-full">
+                    <div className="text-[13px] text-ink-3 text-center">
+                      No seats yet. Head to{' '}
+                      <button
+                        className="text-teal-ink underline bg-transparent border-0 cursor-pointer p-0 font-medium"
+                        onClick={() => setActive('seats')}
+                      >
+                        Seats &amp; departments
+                      </button>{' '}
+                      to add some.
+                    </div>
+                  </Card>
+                ) : (
+                  tiles.map((t) => <SeatCard key={t.id} tile={t} />)
+                )}
               </div>
             </section>
           </div>
@@ -273,45 +383,38 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
                 <span className="qf-live-dot" />
                 <span className="text-[12.5px] font-medium">Activity</span>
-                <span className="ml-auto text-[11.5px] text-ink-3">Updated just now</span>
+                <span className="ml-auto text-[11.5px] text-ink-3">
+                  {sessions.length === 0 ? 'No sessions' : `${sessions.length} live`}
+                </span>
               </div>
               <div className="overflow-auto qf-scroll" style={{ maxHeight: 480 }}>
-                {FEED.map((f, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      'px-4 py-2.5 flex gap-2.5',
-                      i < FEED.length - 1 && 'border-b border-line',
-                    )}
-                  >
-                    <FeedKindIcon kind={f.kind} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[12.5px] text-ink-2 leading-[1.45]">{f.text}</div>
-                      <div className="text-[11px] text-ink-4 mt-0.5">
-                        {agoLabel((f.t + now) * 1000)}
+                {sessions.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-[12.5px] text-ink-3">
+                    No active sessions yet. Org users will appear here when they claim a seat.
+                  </div>
+                ) : (
+                  sessions.map((s, i) => (
+                    <div
+                      key={s.assignmentId}
+                      className={cn(
+                        'px-4 py-2.5 flex gap-2.5',
+                        i < sessions.length - 1 && 'border-b border-line',
+                      )}
+                    >
+                      <FeedKindIcon kind="session" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12.5px] text-ink-2 leading-[1.45]">
+                          <b>{s.memberName}</b> on shift at <b>{s.seatName}</b>
+                        </div>
+                        <div className="text-[11px] text-ink-4 mt-0.5">
+                          Started {agoLabel(new Date(s.startedAt).getTime())}
+                          {' · '}
+                          last seen {agoLabel(new Date(s.lastSeenAt).getTime() + now * 0)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card padding={16}>
-              <div className="flex items-center gap-2.5 mb-2.5">
-                <Icon name="qr" size={16} className="text-ink-3" />
-                <span className="text-[12.5px] font-medium">Main entrance QR</span>
-              </div>
-              <div className="flex gap-3 items-center">
-                <QRPlaceholder size={84} seed="qf-main" />
-                <div>
-                  <div
-                    className="mono text-[11.5px] text-ink-2 mb-1.5"
-                    style={{ lineHeight: 1.4 }}
-                  >
-                    queueflow.io/q/bryanston-family-practice
-                  </div>
-                  <Button variant="ghost" size="sm" icon="copy">Copy link</Button>
-                </div>
+                  ))
+                )}
               </div>
             </Card>
           </aside>
@@ -343,30 +446,13 @@ function FeedKindIcon({ kind }: { kind: FeedKind }) {
   );
 }
 
-function SeatCard({ seat }: { seat: DashSeat }) {
-  const unmanned = !seat.active && seat.queue > 0;
-  const idle = seat.active && !seat.serving && seat.queue <= 1;
-
+function SeatCard({ tile }: { tile: SeatTile }) {
+  const session = tile.session;
   return (
     <div
       className="bg-surface rounded-xl p-3.5 relative transition-[border-color,box-shadow] duration-150"
-      style={{
-        border: `1px solid ${unmanned ? 'var(--coral)' : 'var(--line)'}`,
-        boxShadow: unmanned
-          ? '0 0 0 4px var(--coral-tint), var(--shadow-sm)'
-          : 'var(--shadow-sm)',
-      }}
+      style={{ border: '1px solid var(--line)', boxShadow: 'var(--shadow-sm)' }}
     >
-      {unmanned && (
-        <Pill
-          tone="coral"
-          icon="alert"
-          className="absolute top-2.5 right-2.5"
-        >
-          Unmanned
-        </Pill>
-      )}
-
       <div className="flex items-center gap-2.5">
         <span
           className="inline-flex items-center justify-center bg-surface-2 text-ink-3 rounded-[8px] flex-none"
@@ -375,22 +461,22 @@ function SeatCard({ seat }: { seat: DashSeat }) {
           <Icon name="chair" size={14} />
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-[13.5px] font-medium">{seat.name}</div>
-          <div className="text-[11.5px] text-ink-3">{seat.dept}</div>
+          <div className="text-[13.5px] font-medium truncate">{tile.name}</div>
+          <div className="text-[11.5px] text-ink-3 truncate">{tile.department}</div>
         </div>
       </div>
 
       <div className="mt-3 p-3 bg-surface-2 border border-line rounded-[8px] flex items-center gap-2.5">
-        {seat.user ? (
+        {session ? (
           <>
-            <Avatar name={seat.user} size={26} active={seat.active} />
+            <Avatar name={session.memberName} size={26} active />
             <div className="flex-1 min-w-0">
-              <div className="text-[12.5px] font-medium">{seat.user}</div>
+              <div className="text-[12.5px] font-medium truncate">{session.memberName}</div>
               <div className="text-[11px] text-ink-3">
-                {seat.role} · {seat.active ? 'On shift' : 'Off'}
+                Started {agoLabel(new Date(session.startedAt).getTime())}
               </div>
             </div>
-            {seat.active && <span className="qf-live-dot" />}
+            <span className="qf-live-dot" />
           </>
         ) : (
           <>
@@ -411,36 +497,28 @@ function SeatCard({ seat }: { seat: DashSeat }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
 
-      <div className="grid gap-2.5 mt-2.5" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <div>
-          <div
-            className="text-[10.5px] text-ink-4 font-semibold uppercase"
-            style={{ letterSpacing: '0.05em' }}
-          >
-            In queue
-          </div>
-          <div
-            className={cn('tnum text-[18px] font-medium mt-0.5', seat.queue > 5 ? 'text-coral-2' : 'text-ink')}
-          >
-            {seat.queue}
-          </div>
+function SeatCardSkeleton() {
+  return (
+    <div
+      className="bg-surface rounded-xl p-3.5"
+      style={{ border: '1px solid var(--line)' }}
+    >
+      <div className="flex items-center gap-2.5">
+        <SkeletonBox w={30} h={30} />
+        <div className="flex-1 min-w-0">
+          <SkeletonLine w="60%" h={12} />
+          <SkeletonLine w="40%" h={10} className="mt-1.5" />
         </div>
-        <div className="min-w-0">
-          <div
-            className="text-[10.5px] text-ink-4 font-semibold uppercase"
-            style={{ letterSpacing: '0.05em' }}
-          >
-            Now serving
-          </div>
-          <div
-            className={cn(
-              'text-[13px] font-medium mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap',
-              seat.serving ? 'text-ink' : 'text-ink-4',
-            )}
-          >
-            {seat.serving || (idle ? 'Waiting…' : '—')}
-          </div>
+      </div>
+      <div className="mt-3 p-3 bg-surface-2 border border-line rounded-[8px] flex items-center gap-2.5">
+        <SkeletonBox w={26} h={26} circle />
+        <div className="flex-1">
+          <SkeletonLine w="70%" h={11} />
+          <SkeletonLine w="50%" h={10} className="mt-1.5" />
         </div>
       </div>
     </div>

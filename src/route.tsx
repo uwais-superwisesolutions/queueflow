@@ -90,7 +90,21 @@ function OnboardingRoute() {
 }
 function OrgUserClaimRoute() {
   const navigate = useNavigate()
-  return <OrgUserClaimScreen onClaim={() => navigate('/queue')} />
+  return (
+    <OrgUserClaimScreen
+      onClaim={() => navigate('/queue')}
+      onSignOut={() => navigate('/login', { replace: true })}
+    />
+  )
+}
+function OrgUserQueueRoute() {
+  const navigate = useNavigate()
+  return (
+    <OrgUserQueueScreen
+      onShiftEnded={() => navigate('/claim', { replace: true })}
+      onSignOut={() => navigate('/login', { replace: true })}
+    />
+  )
 }
 function ClientPhoneRoute() {
   const navigate = useNavigate()
@@ -125,19 +139,57 @@ function ClientReturningRoute() {
 }
 function ClientSlotPickerRoute() {
   const navigate = useNavigate()
-  return <ClientSlotPickerScreen onSelect={() => navigate('/client/confirm')} onBack={() => navigate('/client/details')} />
+  return (
+    <ClientSlotPickerScreen
+      onSelect={(sel) => navigate('/client/confirm', { state: { slot: sel.slot } })}
+      onBack={() => navigate('/client')}
+    />
+  )
 }
 function ClientConfirmationRoute() {
   const navigate = useNavigate()
-  return <ClientConfirmationScreen onApproved={() => navigate('/client/status')} onPickAnother={() => navigate('/client/slots')} />
+  const location = useLocation()
+  const slot = (location.state as { slot?: import('@/types').SlotResponse } | null)?.slot
+  if (!slot) return <Navigate to="/client/slots" replace />
+  return (
+    <ClientConfirmationScreen
+      slot={slot}
+      onResolved={({ reason, booking }) => {
+        if (reason === 'approved') {
+          navigate('/client/status', { replace: true, state: { bookingId: booking.id } })
+        } else if (reason === 'rejected') {
+          navigate('/client/rejected', { replace: true, state: { reason: booking.rejectionReason } })
+        } else {
+          navigate('/client/slots', { replace: true })
+        }
+      }}
+      onPickAnother={() => navigate('/client/slots', { replace: true })}
+    />
+  )
 }
 function ClientStatusRoute() {
   const navigate = useNavigate()
-  return <ClientStatusScreen onCancel={() => navigate('/')} />
+  const location = useLocation()
+  const bookingId = (location.state as { bookingId?: string } | null)?.bookingId
+  return (
+    <ClientStatusScreen
+      bookingId={bookingId}
+      onCancel={() => navigate('/client/slots', { replace: true })}
+      onBookAnother={() => navigate('/client/slots')}
+    />
+  )
 }
 function ClientRejectionRoute() {
   const navigate = useNavigate()
-  return <ClientRejectionScreen onPickAnother={() => navigate('/client/slots')} onCancel={() => navigate('/')} />
+  const location = useLocation()
+  const reason = (location.state as { reason?: string } | null)?.reason
+  return (
+    <ClientRejectionScreen
+      reason={reason ?? null}
+      onPickAnother={() => navigate('/client/slots', { replace: true })}
+      onCancel={() => navigate('/')}
+    />
+  )
 }
 function DashboardRoute({ initialPage }: { initialPage: string }) {
   const navigate = useNavigate()
@@ -182,8 +234,7 @@ const router = createBrowserRouter([
 
       // OrgUser
       { path: '/claim',        element: wrap(<OrgUserClaimRoute />) },
-      { path: '/queue',        element: wrap(<OrgUserQueueScreen />) },
-      { path: '/queue/dark',   element: wrap(<OrgUserQueueScreen darkExample />) },
+      { path: '/queue',        element: wrap(<OrgUserQueueRoute />) },
       { path: '/availability', element: wrap(<AvailabilityView />) },
 
       // Client portal

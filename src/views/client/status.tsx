@@ -1,126 +1,236 @@
-import { useState, useEffect, useRef } from 'react';
+ 
+import { useEffect, useMemo, useState } from 'react';
 import { PhoneFrame } from '@/components/layout';
-import { Icon, Button, Card } from '@/components/ui';
+import { Icon, Button, Card, SkeletonBox, SkeletonLine } from '@/components/ui';
 import { useTick } from '@/hooks/use-tick';
 import { formatHMS } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/lib/api-error';
+import {
+  cancelMyClientBooking,
+  listMyClientBookings,
+} from '@/services/clientBookingApi';
+import { getCachedPortalScan } from '@/lib/client-org';
+import type { BookingResponse, BookingStatus } from '@/types';
 
 interface ClientStatusScreenProps {
+  bookingId?: string;
   onCancel: () => void;
+  onBookAnother: () => void;
 }
 
-const BOOKING_DETAILS = [
-  { label: 'Provider',  value: 'Dr. Amara Okonkwo',       icon: 'user'     },
-  { label: 'Seat',      value: 'Consultation room 1',      icon: 'chair'    },
-  { label: 'Type',      value: 'Consult · 30 min',          icon: 'clock'    },
-  { label: 'Scheduled', value: 'Today, 15:00',              icon: 'calendar' },
-] as const;
+const ACTIVE_STATUSES = new Set<BookingStatus>([
+  'pending_approval',
+  'scheduled',
+  'checked_in',
+  'in_service',
+]);
 
-const UPDATES = [
-  {
-    tone: 'coral',
-    icon: 'alert',
-    text: <>Dr. Okonkwo is running ~10 min late. We've updated your estimated time.</>,
-    age: '2m ago',
-  },
-  {
-    tone: 'blue',
-    icon: 'user',
-    text: <>You moved up — now <b>#3</b>.</>,
-    age: '8m ago',
-  },
-  {
-    tone: 'success',
-    icon: 'check',
-    text: <>Your booking was approved by Dr. Okonkwo.</>,
-    age: '27m ago',
-  },
-] as const;
+const POLL_MS = 8_000;
 
-const TOTAL = 5;
-const INITIAL_ETA = 18 * 60 + 4;
+function fmtTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
 
-export function ClientStatusScreen({ onCancel }: ClientStatusScreenProps) {
-  const pos = 3;
-  const etaRef = useRef(INITIAL_ETA);
-  const [, forceRender] = useState(0);
+function fmtDay(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: ClientStatusScreenProps) {
+  const [booking, setBooking] = useState<BookingResponse | null>(null);
+  const [otherActive, setOtherActive] = useState<BookingResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<number>(0);
+  const scan = useMemo(() => getCachedPortalScan(), []);
 
   useTick(1000);
 
+  const refresh = async () => {
+    try {
+      const resp = await listMyClientBookings();
+      const list = resp.data;
+      const focus = bookingId
+        ? list.find((b) => b.id === bookingId) ?? null
+        : list.find((b) => ACTIVE_STATUSES.has(b.status)) ?? null;
+      setBooking(focus);
+      setOtherActive(
+        list.filter((b) => ACTIVE_STATUSES.has(b.status) && b.id !== focus?.id),
+      );
+      setUpdatedAt(Date.now());
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not load your booking.'));
+    }
+  };
+
   useEffect(() => {
-    const id = setInterval(() => {
-      etaRef.current = Math.max(0, etaRef.current - 1);
-      forceRender(n => n + 1);
-    }, 1000);
-    return () => clearInterval(id);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      await refresh();
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+     
+  }, [bookingId]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => void refresh(), POLL_MS);
+    return () => window.clearInterval(id);
+     
   }, []);
+
+  const handleCancel = async () => {
+    if (!booking) return;
+    if (!window.confirm('Cancel your spot? You can re-book straight after.')) return;
+    setCancelling(true);
+    setError(null);
+    try {
+      await cancelMyClientBooking(booking.id);
+      onCancel();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not cancel.'));
+      setCancelling(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────
+  // Loading / empty / non-active states
+  // ─────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <PhoneFrame>
+        <div className="p-6">
+          <SkeletonLine w={140} h={11} />
+          <SkeletonBox w={120} h={70} className="mx-auto mt-6" />
+          <SkeletonBox w="100%" h={88} className="mt-6" />
+          <SkeletonBox w="100%" h={160} className="mt-3" />
+        </div>
+      </PhoneFrame>
+    );
+  }
+
+  if (!booking) {
+    return (
+      <PhoneFrame>
+        <div className="p-6 flex flex-col items-center text-center">
+          <span className="w-12 h-12 rounded-[12px] bg-surface-2 text-ink-3 inline-flex items-center justify-center">
+            <Icon name="info" size={20} />
+          </span>
+          <h2 className="m-0 mt-3 text-[18px] font-medium">No active booking</h2>
+          <p className="m-0 mt-1 text-[13px] text-ink-3">
+            You don't have anything in the queue right now.
+          </p>
+          <Button variant="primary" className="mt-4" onClick={onBookAnother} iconRight="arrowR">
+            Pick a slot
+          </Button>
+        </div>
+      </PhoneFrame>
+    );
+  }
+
+  if (!ACTIVE_STATUSES.has(booking.status)) {
+    const messages: Partial<Record<BookingStatus, string>> = {
+      completed: 'Your visit is complete. See you next time.',
+      cancelled: 'This booking was cancelled.',
+      rejected: booking.rejectionReason
+        ? `Your request was declined: ${booking.rejectionReason}`
+        : 'Your request was declined. Try another slot.',
+      expired: 'The soft-hold expired before the team could review.',
+      no_show: 'This booking was marked as a no-show.',
+    };
+    return (
+      <PhoneFrame>
+        <div className="p-6 flex flex-col items-center text-center">
+          <span className="w-12 h-12 rounded-[12px] bg-surface-2 text-ink-3 inline-flex items-center justify-center">
+            <Icon
+              name={booking.status === 'completed' ? 'check' : 'info'}
+              size={20}
+            />
+          </span>
+          <h2 className="m-0 mt-3 text-[18px] font-medium capitalize">
+            {booking.status.replace('_', ' ')}
+          </h2>
+          <p className="m-0 mt-1 text-[13px] text-ink-3">
+            {messages[booking.status] ?? 'This booking is no longer active.'}
+          </p>
+          <Button variant="primary" className="mt-4" onClick={onBookAnother} iconRight="arrowR">
+            Pick another slot
+          </Button>
+        </div>
+      </PhoneFrame>
+    );
+  }
+
+  const minsUntil = Math.max(0, Math.floor((new Date(booking.scheduledStartAt).getTime() - Date.now()) / 1000));
 
   return (
     <PhoneFrame>
       <div className="flex flex-col min-h-full">
-        {/* Header */}
         <div className="px-6 pt-5 pb-4 flex items-center gap-2.5">
-          <span className="w-7 h-7 rounded-[7px] bg-teal text-white inline-flex items-center justify-center text-[11px] font-semibold flex-none">
-            BF
+          <span
+            className="w-7 h-7 rounded-[7px] inline-flex items-center justify-center text-[11px] font-semibold flex-none text-white"
+            style={{ background: scan?.brandColor ?? 'var(--teal)' }}
+          >
+            {(scan?.orgName ?? '?').slice(0, 2).toUpperCase()}
           </span>
-          <div className="flex-1">
-            <div className="text-[13px] font-semibold">Bryanston Family Practice</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-semibold truncate">{scan?.orgName ?? 'Your queue'}</div>
             <div className="text-[10.5px] text-ink-3 flex items-center gap-1">
               <span className="qf-live-dot" style={{ width: 5, height: 5 }} />
-              Live status · updated 3s ago
+              Live status · updated {updatedAt ? `${Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))}s ago` : 'just now'}
             </div>
           </div>
-          <button className="border-0 bg-surface-2 rounded-[8px] p-[7px] cursor-pointer text-ink-3">
+          <button
+            onClick={refresh}
+            className="border-0 bg-surface-2 rounded-[8px] p-[7px] cursor-pointer text-ink-3"
+            aria-label="Refresh"
+          >
             <Icon name="refresh" size={14} />
           </button>
         </div>
 
-        {/* Big position number */}
+        {error && (
+          <div
+            className="mx-6 mb-3 px-3 py-2 rounded-[8px] text-[12px]"
+            style={{
+              background: 'var(--coral-tint)',
+              border: '1px solid color-mix(in oklab, var(--coral) 25%, transparent)',
+            }}
+          >
+            <Icon name="alert" size={12} /> {error}
+          </div>
+        )}
+
         <div className="px-6 pb-6 text-center">
           <div className="mono text-[11px] text-ink-4 uppercase tracking-[0.08em] font-semibold">
-            Your place in line
+            Status
           </div>
-          <div className="inline-flex items-baseline gap-1.5 my-2.5">
-            <span className="text-[22px] text-ink-3 font-normal">#</span>
-            <span
-              className="tnum text-teal"
-              style={{ fontSize: 84, fontWeight: 500, lineHeight: 0.95, letterSpacing: '-0.04em' }}
-            >
-              {pos}
-            </span>
+          <div
+            className="text-teal mt-2"
+            style={{ fontSize: 38, fontWeight: 500, lineHeight: 1, letterSpacing: '-0.02em' }}
+          >
+            {labelForStatus(booking.status)}
           </div>
-          <div className="text-[13px] text-ink-2">
-            of <span className="tnum">{TOTAL}</span> in Dr. Okonkwo's queue
-          </div>
-
-          {/* Queue dots */}
-          <div className="flex gap-[7px] justify-center mt-5">
-            {Array.from({ length: TOTAL }).map((_, i) => {
-              const ahead = i < pos - 1;
-              const me = i === pos - 1;
-              return (
-                <div key={i} className="flex flex-col items-center gap-1.5 relative">
-                  <span
-                    className="rounded-full transition-all duration-300"
-                    style={{
-                      width:      me ? 18 : 12,
-                      height:     me ? 18 : 12,
-                      background: ahead ? 'var(--ink-4)' : me ? 'var(--teal)' : 'var(--line-2)',
-                      boxShadow:  me ? '0 0 0 4px var(--teal-tint)' : 'none',
-                    }}
-                  />
-                  {me && (
-                    <span className="absolute top-6 text-[10px] text-teal-ink font-medium whitespace-nowrap">
-                      You
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+          <div className="text-[13px] text-ink-2 mt-2">
+            {booking.status === 'in_service'
+              ? 'You\'re being seen now.'
+              : booking.status === 'checked_in'
+                ? 'You\'re checked in — they\'ll call you soon.'
+                : `Scheduled for ${fmtDay(booking.scheduledStartAt)} at ${fmtTime(booking.scheduledStartAt)}`}
           </div>
         </div>
 
-        {/* ETA card */}
         <div className="px-4 pb-4">
           <div
             className="p-4 rounded-[14px] text-center"
@@ -136,74 +246,102 @@ export function ClientStatusScreen({ onCancel }: ClientStatusScreenProps) {
               className="mono tnum text-teal-ink mt-1.5"
               style={{ fontSize: 38, fontWeight: 500, letterSpacing: '-0.03em' }}
             >
-              {formatHMS(etaRef.current)}
+              {booking.status === 'in_service' ? 'Now' : formatHMS(minsUntil * 1000)}
             </div>
             <div className="text-[11.5px] text-ink-3 mt-1">
-              Around 15:08 · we'll text you 5 min before
+              Around {fmtTime(booking.scheduledStartAt)} · we'll text you 5 min before
             </div>
           </div>
         </div>
 
-        {/* Booking details */}
         <div className="px-4 pb-4">
           <Card padding={0}>
-            {BOOKING_DETAILS.map(({ label, value, icon }, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'px-3.5 py-2.5 flex items-center gap-2.5',
-                  i < BOOKING_DETAILS.length - 1 && 'border-b border-line',
-                )}
-              >
-                <Icon name={icon} size={14} className="text-ink-3" />
-                <span className="text-[12px] text-ink-3 w-[70px]">{label}</span>
-                <span className="text-[13px] font-medium">{value}</span>
-              </div>
-            ))}
+            <DetailRow icon="calendar" label="When" value={`${fmtDay(booking.scheduledStartAt)}, ${fmtTime(booking.scheduledStartAt)}`} />
+            <DetailRow icon="clock" label="Length" value={`${Math.round((new Date(booking.scheduledEndAt).getTime() - new Date(booking.scheduledStartAt).getTime()) / 60000)} min`} last />
           </Card>
         </div>
 
-        {/* Updates feed */}
-        <div className="px-4 pb-4">
-          <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold mb-2">
-            Recent updates
-          </div>
-          <Card padding={0}>
-            {UPDATES.map((u, i) => (
-              <div
-                key={i}
-                className={cn('px-3.5 py-2.5 flex gap-2.5', i < UPDATES.length - 1 && 'border-b border-line')}
-              >
-                <span
-                  className="w-[22px] h-[22px] rounded-[6px] flex-none inline-flex items-center justify-center"
-                  style={{
-                    background: `var(--${u.tone}-tint)`,
-                    color:
-                      u.tone === 'coral'   ? 'var(--coral-2)' :
-                      u.tone === 'blue'    ? 'var(--blue)'    : 'var(--success)',
-                  }}
+        {otherActive.length > 0 && (
+          <div className="px-4 pb-4">
+            <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold mb-2">
+              Other active bookings
+            </div>
+            <Card padding={0}>
+              {otherActive.map((b, i) => (
+                <div
+                  key={b.id}
+                  className={cn(
+                    'px-3.5 py-2.5 flex items-center gap-3',
+                    i < otherActive.length - 1 && 'border-b border-line',
+                  )}
                 >
-                  <Icon name={u.icon} size={12} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12.5px] text-ink-2 leading-[1.45]">{u.text}</div>
-                  <div className="text-[11px] text-ink-4 mt-0.5">{u.age}</div>
+                  <Icon name="calendar" size={13} className="text-ink-3" />
+                  <div className="flex-1">
+                    <div className="text-[12.5px] font-medium">
+                      {fmtDay(b.scheduledStartAt)}, {fmtTime(b.scheduledStartAt)}
+                    </div>
+                    <div className="text-[11px] text-ink-3 capitalize">
+                      {b.status.replace('_', ' ')}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </Card>
-        </div>
+              ))}
+            </Card>
+          </div>
+        )}
 
-        {/* Actions */}
-        <div className="px-4 pb-6 flex flex-col gap-2">
-          <Button variant="secondary" full className="h-[46px]" icon="clock">
-            I'm running late
-          </Button>
-          <Button variant="danger-ghost" full className="h-[46px]" icon="x" onClick={onCancel}>
-            Cancel my spot
-          </Button>
+        <div className="px-4 pb-6 flex flex-col gap-2 mt-auto">
+          {booking.status === 'pending_approval' || booking.status === 'scheduled' ? (
+            <Button
+              variant="danger-ghost"
+              full
+              className="h-[46px]"
+              icon="x"
+              onClick={handleCancel}
+              disabled={cancelling}
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel my spot'}
+            </Button>
+          ) : null}
         </div>
       </div>
     </PhoneFrame>
+  );
+}
+
+function labelForStatus(status: BookingStatus): string {
+  switch (status) {
+    case 'pending_approval':
+      return 'Reviewing';
+    case 'scheduled':
+      return 'You\'re on';
+    case 'checked_in':
+      return 'Checked in';
+    case 'in_service':
+      return 'In service';
+    case 'completed':
+      return 'Complete';
+    default:
+      return status.replace('_', ' ');
+  }
+}
+
+function DetailRow({
+  icon,
+  label,
+  value,
+  last,
+}: {
+  icon: 'calendar' | 'clock' | 'user' | 'chair';
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
+  return (
+    <div className={cn('px-3.5 py-2.5 flex items-center gap-2.5', !last && 'border-b border-line')}>
+      <Icon name={icon} size={14} className="text-ink-3" />
+      <span className="text-[12px] text-ink-3 w-[70px]">{label}</span>
+      <span className="text-[13px] font-medium truncate">{value}</span>
+    </div>
   );
 }

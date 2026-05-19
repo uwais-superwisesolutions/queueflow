@@ -6,12 +6,13 @@ const CLIENT_TOKEN_KEY = 'client_token'
 /**
  * Client routes use a per-tenant HS256 token (issued by /api/client/phone/confirm).
  * Org routes use the Supabase ES256 token (from /api/auth/login or /signup).
- * The OTP request/confirm endpoints are public — no token attached.
+ * The OTP request/confirm endpoints + portal-link scan are public — no token attached.
  */
 function isPublicClientRoute(url: string) {
   return (
     url.startsWith('/api/client/phone/verify') ||
-    url.startsWith('/api/client/phone/confirm')
+    url.startsWith('/api/client/phone/confirm') ||
+    /^\/api\/client\/portal-links\/[^/]+\/scan$/.test(url)
   )
 }
 
