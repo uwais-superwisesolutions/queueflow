@@ -64,7 +64,13 @@ function wrap(el: ReactNode) {
 // Route wrappers — supply navigation handlers to feature screens
 function LandingRoute() {
   const navigate = useNavigate()
-  return <LandingScreen onCta={() => navigate('/signup')} onSignIn={() => navigate('/login')} />
+  return (
+    <LandingScreen
+      onCta={() => navigate('/signup')}
+      onSignIn={() => navigate('/login')}
+      onClientPortal={() => navigate('/client')}
+    />
+  )
 }
 function SignUpRoute() {
   const navigate = useNavigate()
@@ -72,7 +78,13 @@ function SignUpRoute() {
 }
 function LoginRoute() {
   const navigate = useNavigate()
-  return <LoginScreen onSubmit={() => navigate('/dashboard')} onSignUp={() => navigate('/signup')} />
+  return (
+    <LoginScreen
+      onSubmit={() => navigate('/dashboard')}
+      onSignUp={() => navigate('/signup')}
+      onClientPortal={() => navigate('/client')}
+    />
+  )
 }
 function AcceptInviteRoute() {
   const navigate = useNavigate()
@@ -118,6 +130,16 @@ function ClientRejectionRoute() {
   const navigate = useNavigate()
   return <ClientRejectionScreen onPickAnother={() => navigate('/client/slots')} onCancel={() => navigate('/')} />
 }
+function DashboardRoute({ initialPage }: { initialPage: string }) {
+  const navigate = useNavigate()
+  return (
+    <SuperUserDashboard
+      initialPage={initialPage}
+      onPersona={() => navigate('/claim')}
+      onOpenClientPortal={() => navigate('/client')}
+    />
+  )
+}
 
 const router = createBrowserRouter([
   // Marketing / auth (guest layout)
@@ -139,12 +161,15 @@ const router = createBrowserRouter([
       { path: '/onboarding', element: wrap(<OnboardingRoute />) },
 
       // SuperUser dashboard + sub-pages
-      { path: '/dashboard',            element: wrap(<SuperUserDashboard initialPage="dashboard" />) },
-      { path: '/dashboard/users',      element: wrap(<SuperUserDashboard initialPage="orgusers" />) },
-      { path: '/dashboard/seats',      element: wrap(<SuperUserDashboard initialPage="seats" />) },
-      { path: '/dashboard/timeslots',  element: wrap(<SuperUserDashboard initialPage="timeslots" />) },
-      { path: '/dashboard/links',      element: wrap(<SuperUserDashboard initialPage="links" />) },
-      { path: '/dashboard/analytics',  element: wrap(<SuperUserDashboard initialPage="analytics" />) },
+      { path: '/dashboard',            element: wrap(<DashboardRoute initialPage="dashboard" />) },
+      { path: '/dashboard/queues',     element: wrap(<DashboardRoute initialPage="queues" />) },
+      { path: '/dashboard/users',      element: wrap(<DashboardRoute initialPage="orgusers" />) },
+      { path: '/dashboard/seats',      element: wrap(<DashboardRoute initialPage="seats" />) },
+      { path: '/dashboard/timeslots',  element: wrap(<DashboardRoute initialPage="timeslots" />) },
+      { path: '/dashboard/links',      element: wrap(<DashboardRoute initialPage="links" />) },
+      { path: '/dashboard/analytics',  element: wrap(<DashboardRoute initialPage="analytics" />) },
+      { path: '/dashboard/settings',   element: wrap(<DashboardRoute initialPage="settings" />) },
+      { path: '/dashboard/billing',    element: wrap(<DashboardRoute initialPage="billing" />) },
 
       // OrgUser
       { path: '/claim',        element: wrap(<OrgUserClaimRoute />) },
