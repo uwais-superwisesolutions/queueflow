@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, useNavigate } from 'react-router-dom'
 import AppLayout from '@/layouts/app-layout'
 import GuestLayout from '@/layouts/guest-layout'
+import { RouteLoadingSkeleton } from '@/components/ui'
 
 // Marketing
 const LandingScreen     = lazy(() => import('@/views/marketing/landing').then(m => ({ default: m.LandingScreen })))
@@ -36,29 +37,8 @@ const LoadingSkeletonScreen = lazy(() => import('@/views/system/loading-skeleton
 const ErrorStateScreen     = lazy(() => import('@/views/system/error-state').then(m => ({ default: m.ErrorStateScreen })))
 const SmsPreviewScreen     = lazy(() => import('@/views/system/sms-preview').then(m => ({ default: m.SmsPreviewScreen })))
 
-function Loader() {
-  return (
-    <div className="min-h-screen bg-bg flex items-center justify-center">
-      <div className="flex items-center gap-[3px]">
-        {[3, 4, 5, 6, 7].map((d, i) => (
-          <span
-            key={i}
-            className="rounded-full animate-qf-pulse"
-            style={{
-              width: d, height: d,
-              background: i === 3 ? 'var(--teal)' : 'var(--ink)',
-              opacity: i === 3 ? 1 : 0.25 + i * 0.15,
-              animationDelay: `${i * 0.1}s`,
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function wrap(el: ReactNode) {
-  return <Suspense fallback={<Loader />}>{el}</Suspense>
+  return <Suspense fallback={<RouteLoadingSkeleton />}>{el}</Suspense>
 }
 
 // Route wrappers — supply navigation handlers to feature screens
