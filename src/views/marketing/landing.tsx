@@ -6,9 +6,10 @@ import { formatMS } from '@/lib/time';
 interface LandingScreenProps {
   onCta?: () => void;
   onSignIn?: () => void;
+  onClientPortal?: () => void;
 }
 
-export function LandingScreen({ onCta, onSignIn }: LandingScreenProps) {
+export function LandingScreen({ onCta, onSignIn, onClientPortal }: LandingScreenProps) {
   return (
     <div className="min-h-[calc(100vh-48px)] bg-bg text-ink">
       <header style={{ maxWidth: 1240, margin: '0 auto', padding: '22px 32px', display: 'flex', alignItems: 'center', gap: 24 }}>
@@ -20,6 +21,7 @@ export function LandingScreen({ onCta, onSignIn }: LandingScreenProps) {
           <a className="cursor-pointer">Customers</a>
         </nav>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Button variant="ghost" size="sm" icon="phone" onClick={onClientPortal}>Join a queue</Button>
           <Button variant="ghost" size="sm" onClick={onSignIn}>Sign in</Button>
           <Button variant="primary" size="sm" onClick={onCta} iconRight="arrowR">Start free trial</Button>
         </div>

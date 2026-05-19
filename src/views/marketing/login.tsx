@@ -4,15 +4,22 @@ import { AuthCard } from './landing';
 interface LoginScreenProps {
   onSubmit?: () => void;
   onSignUp?: () => void;
+  onClientPortal?: () => void;
 }
 
-export function LoginScreen({ onSubmit, onSignUp }: LoginScreenProps) {
+export function LoginScreen({ onSubmit, onSignUp, onClientPortal }: LoginScreenProps) {
   return (
     <AuthCard
       footer={
         <>
-          New here?{' '}
-          <a onClick={onSignUp} className="text-teal-ink cursor-pointer font-medium">Start a free trial</a>
+          <div>
+            New here?{' '}
+            <a onClick={onSignUp} className="text-teal-ink cursor-pointer font-medium">Start a free trial</a>
+          </div>
+          <div className="mt-1 text-ink-3">
+            Joining a queue as a client?{' '}
+            <a onClick={onClientPortal} className="text-teal-ink cursor-pointer font-medium">Go to client portal →</a>
+          </div>
         </>
       }
     >

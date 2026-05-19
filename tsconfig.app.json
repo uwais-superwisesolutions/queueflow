@@ -22,7 +22,8 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "ui": ["./src/components/ui/index.ts"]
     },
     "ignoreDeprecations": "6.0"
   },

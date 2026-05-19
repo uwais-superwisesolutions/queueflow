@@ -1,4 +1,4 @@
-// src/features/superuser/management.tsx
+// src/views/superuser/management.tsx
 // All 5 super-user management views: OrgUsers, Seats, Timeslots, ClientLinks, Analytics
 
 import { useState, useMemo, type ReactNode } from 'react';
@@ -570,7 +570,11 @@ export function TimeslotsView() {
 
 type LinkScope = 'Whole org' | 'Department' | 'Specific seat';
 
-export function ClientLinksView() {
+interface ClientLinksViewProps {
+  onOpenClientPortal?: () => void;
+}
+
+export function ClientLinksView({ onOpenClientPortal }: ClientLinksViewProps = {}) {
   const [showModal, setShowModal] = useState(false);
   const [scope, setScope] = useState<LinkScope>('Whole org');
   const scopeOptions: LinkScope[] = ['Whole org', 'Department', 'Specific seat'];
@@ -609,6 +613,9 @@ export function ClientLinksView() {
                 <span className="flex-1" />
                 <Button variant="ghost" size="sm" icon="copy">Copy</Button>
                 <Button variant="ghost" size="sm" icon="download">QR</Button>
+                <Button variant="secondary" size="sm" iconRight="arrowR" onClick={onOpenClientPortal}>
+                  Open
+                </Button>
               </div>
             </Card>
           ))}

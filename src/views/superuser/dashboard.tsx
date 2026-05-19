@@ -1,4 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icon, Button, Card, Pill, Avatar, Kpi, QRPlaceholder } from '@/components/ui';
 import { Sidebar, TopBar } from '@/components/layout';
 import { agoLabel } from '@/lib/time';
@@ -24,6 +25,22 @@ const SU_NAV: SidebarNavItem[] = [
   { id: 'settings',  label: 'Settings',            icon: 'settings' },
   { id: 'billing',   label: 'Billing',             icon: 'shield' },
 ];
+
+const NAV_PATHS: Record<string, string> = {
+  dashboard: '/dashboard',
+  queues:    '/dashboard/queues',
+  orgusers:  '/dashboard/users',
+  seats:     '/dashboard/seats',
+  timeslots: '/dashboard/timeslots',
+  links:     '/dashboard/links',
+  analytics: '/dashboard/analytics',
+  settings:  '/dashboard/settings',
+  billing:   '/dashboard/billing',
+};
+
+const PATH_TO_NAV: Record<string, string> = Object.fromEntries(
+  Object.entries(NAV_PATHS).map(([id, path]) => [path, id]),
+);
 
 interface DashSeat {
   id: number;
@@ -67,14 +84,22 @@ const FEED: FeedItem[] = [
 interface SuperUserDashboardProps {
   onLogout?: () => void;
   onPersona?: (persona: string) => void;
+  onOpenClientPortal?: () => void;
   initialPage?: string;
 }
 
 export function SuperUserDashboard({
   onPersona,
+  onOpenClientPortal,
   initialPage = 'dashboard',
 }: SuperUserDashboardProps) {
-  const [active, setActive] = useState(initialPage);
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const active = PATH_TO_NAV[pathname] ?? initialPage;
+  const setActive = (id: string) => {
+    const path = NAV_PATHS[id];
+    if (path) navigate(path);
+  };
   const [now, setNow] = useState(0);
 
   useEffect(() => {
@@ -111,7 +136,7 @@ export function SuperUserDashboard({
         {active === 'orgusers'  && <OrgUsersView />}
         {active === 'seats'     && <SeatsView />}
         {active === 'timeslots' && <TimeslotsView />}
-        {active === 'links'     && <ClientLinksView />}
+        {active === 'links'     && <ClientLinksView onOpenClientPortal={onOpenClientPortal} />}
         {active === 'analytics' && <AnalyticsView />}
         {active === 'queues'    && <QueuesPlaceholder />}
         {active === 'settings'  && <SettingsPlaceholder />}
