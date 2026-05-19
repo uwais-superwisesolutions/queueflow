@@ -7,3 +7,4 @@ export { Field, TextInput, SelectInput } from './field';
 export { Modal } from './modal';
 export { Kpi } from './kpi';
 export { QRPlaceholder } from './qr-placeholder';
+export { SkeletonBox, SkeletonLine, QueueLoadingSkeleton, RouteLoadingSkeleton } from './skeleton';
