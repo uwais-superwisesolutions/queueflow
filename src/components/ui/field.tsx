@@ -64,16 +64,15 @@ export function SelectInput({ options, wrapClassName, className, ...rest }: Sele
   return (
     <span
       className={cn(
-        'flex items-center gap-2 bg-surface border border-line-2 rounded-[8px]',
-        'pl-[10px] pr-2 h-[38px] text-ink relative',
+        'relative inline-flex items-center bg-surface border border-line-2 rounded-[8px]',
+        'pl-[10px] pr-[28px] h-[38px] text-ink',
         wrapClassName,
       )}
     >
       <select
         {...rest}
         className={cn(
-          'flex-1 h-full border-0 bg-transparent font-[inherit] text-ink outline-none',
-          'appearance-none pr-[18px]',
+          'w-full h-full min-w-0 border-0 bg-transparent font-[inherit] text-ink outline-none appearance-none',
           className,
         )}
       >
@@ -83,7 +82,11 @@ export function SelectInput({ options, wrapClassName, className, ...rest }: Sele
             : <option key={o.value} value={o.value}>{o.label}</option>
         )}
       </select>
-      <Icon name="chevronD" size={14} className="text-ink-3 pointer-events-none" />
+      <Icon
+        name="chevronD"
+        size={14}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none"
+      />
     </span>
   );
 }

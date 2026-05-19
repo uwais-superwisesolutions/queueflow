@@ -1,21 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon, Button, Card, Divider, Pill, TextInput, SelectInput, QRPlaceholder } from '@/components/ui';
 import { QFLogo } from '@/components/layout';
 import { cn } from '@/lib/utils';
 import type { IconName } from '@/types';
+import { completeOnboarding, getOrganisation, updateOnboardingStep } from '@/services/organisationApi';
+import { useAuthStore } from '@/stores/authStore';
+import { getApiErrorMessage } from '@/lib/api-error';
 
 interface WizStep {
   id: number;
   label: string;
+  /** Persisted to the backend as `onboarding_step`. */
+  key: string;
 }
 
 const WIZ_STEPS: WizStep[] = [
-  { id: 0, label: 'Departments' },
-  { id: 1, label: 'Seats' },
-  { id: 2, label: 'Team' },
-  { id: 3, label: 'Timeslot types' },
-  { id: 4, label: 'Share your link' },
+  { id: 0, label: 'Departments',    key: 'departments' },
+  { id: 1, label: 'Seats',          key: 'seats' },
+  { id: 2, label: 'Team',           key: 'team' },
+  { id: 3, label: 'Timeslot types', key: 'timeslots' },
+  { id: 4, label: 'Share your link',key: 'share' },
 ];
+
+function stepIndexFromKey(key: string | null | undefined): number {
+  if (!key) return 0;
+  const found = WIZ_STEPS.findIndex((s) => s.key === key);
+  return found === -1 ? 0 : found;
+}
 
 interface TimeslotColor {
   v: string;
@@ -66,6 +77,57 @@ interface OnboardingScreenProps {
 
 export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: OnboardingScreenProps) {
   const [step, setStep] = useState(initialStep);
+  const [finishing, setFinishing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const organisationName = useAuthStore((s) => s.organisationName);
+  const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+  const setOrganisationName = useAuthStore((s) => s.setOrganisationName);
+
+  // Resume from the server-saved step on first mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await getOrganisation();
+        if (cancelled) return;
+        if (resp.data.name) setOrganisationName(resp.data.name);
+        if (resp.data.onboardingComplete) {
+          // Already done — bounce out of the wizard.
+          setOnboardingComplete(true);
+          onFinish?.();
+          return;
+        }
+        setStep(stepIndexFromKey(resp.data.onboardingStep));
+      } catch {
+        // Best-effort resume. Stay on initialStep if the org call fails.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [onFinish, setOnboardingComplete, setOrganisationName]);
+
+  const persistStep = (index: number) => {
+    const key = WIZ_STEPS[index]?.key;
+    if (!key) return;
+    // Fire-and-forget: a failed save shouldn't block the user navigating.
+    updateOnboardingStep({ onboardingStep: key }).catch(() => {});
+  };
+
+  const handleFinish = async () => {
+    setError(null);
+    setFinishing(true);
+    try {
+      await completeOnboarding();
+      setOnboardingComplete(true);
+      onFinish?.();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not finish onboarding.'));
+    } finally {
+      setFinishing(false);
+    }
+  };
+
   const [departments, setDepartments] = useState<Department[]>([
     { id: 1, name: 'General Practice' },
     { id: 2, name: 'Dental' },
@@ -90,11 +152,23 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
     { id: 2, name: 'Follow-up', duration: 15, color: 'blue' },
   ]);
 
-  const next = () => setStep(s => Math.min(s + 1, WIZ_STEPS.length - 1));
-  const prev = () => setStep(s => Math.max(s - 1, 0));
+  const next = () =>
+    setStep((s) => {
+      const ns = Math.min(s + 1, WIZ_STEPS.length - 1);
+      if (ns !== s) persistStep(ns);
+      return ns;
+    });
+  const prev = () =>
+    setStep((s) => {
+      const ns = Math.max(s - 1, 0);
+      if (ns !== s) persistStep(ns);
+      return ns;
+    });
+
+  const orgDisplayName = organisationName || 'your organisation';
 
   const headings = [
-    'What departments does Bryanston Family Practice have?',
+    `What departments does ${orgDisplayName} have?`,
     'Add the seats in each department.',
     'Invite your team.',
     'Configure the services you offer.',
@@ -116,7 +190,7 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
     >
       <header className="px-8 py-5 border-b border-line bg-surface flex items-center gap-6">
         <QFLogo size={18} />
-        <span className="text-[12px] text-ink-3">Bryanston Family Practice</span>
+        <span className="text-[12px] text-ink-3">{orgDisplayName}</span>
         <ProgressBar step={step} total={WIZ_STEPS.length} className="flex-1 max-w-[520px] mx-auto" />
         <Button variant="ghost" size="sm" onClick={onExit}>Save &amp; exit</Button>
       </header>
@@ -154,7 +228,12 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
             <TimeslotsStep timeslots={timeslots} setTimeslots={setTimeslots} />
           )}
           {step === 4 && (
-            <ShareStep departments={departments} seats={seats} invites={invites} />
+            <ShareStep
+              departments={departments}
+              seats={seats}
+              invites={invites}
+              orgName={orgDisplayName}
+            />
           )}
         </div>
       </main>
@@ -176,11 +255,23 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
         </div>
         <span className="text-[12.5px] text-ink-3">{WIZ_STEPS[step].label}</span>
         <span className="flex-1" />
-        <Button variant="ghost" disabled={step === 0} onClick={prev} icon="chevronL">Back</Button>
+        {error && (
+          <span className="text-coral text-[12px] mr-2" role="alert">{error}</span>
+        )}
+        <Button variant="ghost" disabled={step === 0 || finishing} onClick={prev} icon="chevronL">Back</Button>
         {step === 2 && <Button variant="ghost" onClick={next}>Skip for now</Button>}
         {step < WIZ_STEPS.length - 1
           ? <Button variant="primary" onClick={next} iconRight="arrowR">Continue</Button>
-          : <Button variant="primary" onClick={onFinish} iconRight="check">Finish setup</Button>
+          : (
+            <Button
+              variant="primary"
+              onClick={handleFinish}
+              iconRight="check"
+              disabled={finishing}
+            >
+              {finishing ? 'Finishing…' : 'Finish setup'}
+            </Button>
+          )
         }
       </footer>
     </div>
@@ -374,11 +465,14 @@ function InvitesStep({ invites, setInvites, seats }: InvitesStepProps) {
 
   const readyCount = invites.filter(i => i.email).length;
 
+  const invitesGridTemplate =
+    'minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) 32px';
+
   return (
     <Card padding={0}>
       <div
         className="grid px-4 py-2.5 border-b border-line bg-surface-2 text-[11.5px] text-ink-3 font-medium uppercase"
-        style={{ gridTemplateColumns: '1.1fr 1.4fr 1fr 1.2fr 32px', letterSpacing: '0.05em' }}
+        style={{ gridTemplateColumns: invitesGridTemplate, letterSpacing: '0.05em' }}
       >
         <span>Name</span>
         <span>Email</span>
@@ -394,27 +488,31 @@ function InvitesStep({ invites, setInvites, seats }: InvitesStepProps) {
               'grid px-4 py-2.5 items-center gap-2.5',
               i < invites.length - 1 && 'border-b border-line',
             )}
-            style={{ gridTemplateColumns: '1.1fr 1.4fr 1fr 1.2fr 32px' }}
+            style={{ gridTemplateColumns: invitesGridTemplate }}
           >
             <TextInput
               value={inv.name}
               onChange={e => update(inv.id, 'name', e.target.value)}
               placeholder="Full name"
+              wrapClassName="min-w-0"
             />
             <TextInput
               value={inv.email}
               onChange={e => update(inv.id, 'email', e.target.value)}
               placeholder="name@clinic.com"
+              wrapClassName="min-w-0"
             />
             <SelectInput
               value={inv.role}
               onChange={e => update(inv.id, 'role', e.target.value)}
               options={['Org user', 'Super user']}
+              wrapClassName="min-w-0"
             />
             <SelectInput
               value={inv.seat}
               onChange={e => update(inv.id, 'seat', e.target.value)}
               options={seatOptions}
+              wrapClassName="min-w-0"
             />
             <button
               onClick={() => remove(inv.id)}
@@ -523,9 +621,18 @@ interface ShareStepProps {
   departments: Department[];
   seats: Seat[];
   invites: Invite[];
+  orgName: string;
 }
 
-function ShareStep({ departments, seats, invites }: ShareStepProps) {
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function ShareStep({ departments, seats, invites, orgName }: ShareStepProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -535,9 +642,10 @@ function ShareStep({ departments, seats, invites }: ShareStepProps) {
 
   const teamCount = invites.filter(i => i.email).length;
   const deptNames = departments.map(d => d.name).filter(Boolean).join(', ');
+  const slug = slugify(orgName) || 'your-organisation';
 
   const summaryItems: [string, string, IconName][] = [
-    ['1 organization', 'Bryanston Family Practice', 'building'],
+    ['1 organisation', orgName, 'building'],
     [`${departments.length} department${departments.length !== 1 ? 's' : ''}`, deptNames || 'None', 'grid'],
     [`${seats.length} seats, ${teamCount} team members`, 'All ready to claim', 'users'],
   ];
@@ -545,7 +653,7 @@ function ShareStep({ departments, seats, invites }: ShareStepProps) {
   return (
     <Card padding={28}>
       <div className="grid items-center gap-7" style={{ gridTemplateColumns: 'auto 1fr' }}>
-        <QRPlaceholder size={180} seed="bryanston-family-practice" />
+        <QRPlaceholder size={180} seed={slug} />
         <div>
           <Pill tone="teal" dot>Your portal is live</Pill>
           <h3
@@ -560,7 +668,7 @@ function ShareStep({ departments, seats, invites }: ShareStepProps) {
           <div className="flex items-center gap-2.5 mt-[18px] px-3 py-2.5 bg-surface-2 border border-line rounded-[8px]">
             <Icon name="link" size={14} className="text-ink-3" />
             <span className="mono flex-1 text-[12.5px] text-ink">
-              queueflow.io/q/bryanston-family-practice
+              queueflow.io/q/{slug}
             </span>
             <Button
               variant="ghost"

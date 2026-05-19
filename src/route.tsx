@@ -62,7 +62,12 @@ function LoginRoute() {
   const navigate = useNavigate()
   return (
     <LoginScreen
-      onSubmit={() => navigate('/dashboard')}
+      onSubmit={({ role, onboardingComplete }) => {
+        if (role === null) navigate('/accept-invite')
+        else if (role === 'super_user' && !onboardingComplete) navigate('/onboarding')
+        else if (role === 'org_user') navigate('/claim')
+        else navigate('/dashboard')
+      }}
       onSignUp={() => navigate('/signup')}
       onClientPortal={() => navigate('/client')}
     />
@@ -70,7 +75,14 @@ function LoginRoute() {
 }
 function AcceptInviteRoute() {
   const navigate = useNavigate()
-  return <AcceptInviteScreen onSubmit={() => navigate('/claim')} />
+  return (
+    <AcceptInviteScreen
+      onSubmit={({ role }) => {
+        if (role === 'super_user') navigate('/dashboard')
+        else navigate('/claim')
+      }}
+    />
+  )
 }
 function OnboardingRoute() {
   const navigate = useNavigate()

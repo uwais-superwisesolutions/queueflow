@@ -1,13 +1,59 @@
+import { useState } from 'react';
 import { Button, Field, TextInput } from '@/components/ui';
 import { AuthCard } from './landing';
+import { login } from '@/services/authApi';
+import { getOrganisation } from '@/services/organisationApi';
+import { useAuthStore } from '@/stores/authStore';
+import { getApiErrorMessage } from '@/lib/api-error';
+import type { MemberRole } from '@/types';
+
+export interface LoginResult {
+  role: MemberRole | null;
+  onboardingComplete: boolean;
+}
 
 interface LoginScreenProps {
-  onSubmit?: () => void;
+  onSubmit?: (result: LoginResult) => void;
   onSignUp?: () => void;
   onClientPortal?: () => void;
 }
 
 export function LoginScreen({ onSubmit, onSignUp, onClientPortal }: LoginScreenProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const setSession = useAuthStore((s) => s.setSession);
+  const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+
+  const handleSubmit = async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const loginResp = await login({ email: email.trim(), password });
+      setSession(loginResp.data);
+
+      let onboardingComplete = false;
+      if (loginResp.data.role) {
+        // Member of an org — pull the latest onboarding state.
+        try {
+          const orgResp = await getOrganisation();
+          onboardingComplete = orgResp.data.onboardingComplete;
+          setOnboardingComplete(onboardingComplete);
+        } catch {
+          // If the org call fails for any reason, fall through with onboardingComplete=false
+          // so the user lands on the wizard rather than a broken dashboard.
+        }
+      }
+
+      onSubmit?.({ role: loginResp.data.role, onboardingComplete });
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Sign-in failed.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <AuthCard
       footer={
@@ -29,10 +75,19 @@ export function LoginScreen({ onSubmit, onSignUp, onClientPortal }: LoginScreenP
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="Email">
-          <TextInput defaultValue="amara@bryanstonfp.co.za" />
+          <TextInput
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@clinic.com"
+          />
         </Field>
         <Field label="Password">
-          <TextInput type="password" defaultValue="••••••••••" />
+          <TextInput
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••••"
+          />
         </Field>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }} className="text-ink-2">
@@ -40,7 +95,21 @@ export function LoginScreen({ onSubmit, onSignUp, onClientPortal }: LoginScreenP
           </label>
           <a style={{ fontSize: 12.5 }} className="text-teal-ink cursor-pointer">Forgot password</a>
         </div>
-        <Button variant="primary" size="lg" full onClick={onSubmit} iconRight="arrowR">Sign in</Button>
+        {error && (
+          <div className="text-coral text-[12.5px]" role="alert">
+            {error}
+          </div>
+        )}
+        <Button
+          variant="primary"
+          size="lg"
+          full
+          onClick={handleSubmit}
+          iconRight="arrowR"
+          disabled={submitting}
+        >
+          {submitting ? 'Signing in…' : 'Sign in'}
+        </Button>
       </div>
     </AuthCard>
   );
