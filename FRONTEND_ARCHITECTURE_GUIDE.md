@@ -33,8 +33,7 @@ Core goals:
 - HTTP: **Axios** with centralized interceptor (`src/services/interceptor.ts`)
 - State:
   - **Local React state** for most screen interaction
-  - **Redux Toolkit** is configured but currently only has an `_init` placeholder reducer
-  - **Zustand** is installed but not currently used
+  - **Zustand** is installed but not currently used; reach for it first if a small app-wide store is needed
 - Utilities: `clsx` + `tailwind-merge` through `cn(...)` (`src/lib/utils.ts`)
 
 ---
@@ -46,11 +45,10 @@ Core goals:
 The app bootstraps in this order (`src/main.tsx`):
 
 1. React root + `StrictMode`
-2. Redux `Provider`
-3. React Router `RouterProvider`
-4. Global stylesheet import (`src/index.css`)
+2. React Router `RouterProvider`
+3. Global stylesheet import (`src/index.css`)
 
-`src/App.tsx` currently returns `null`. The router is the real application root.
+The router is the application root — there is no top-level `App` component. If a future global provider is needed (theme, auth, store), wrap it around `<RouterProvider />` in `src/main.tsx`.
 
 ### 3.2 Route + Screen Flow
 
@@ -94,7 +92,6 @@ Primary directories in `src/`:
 - `components/layout/` - Shared layout pieces (`Sidebar`, `TopBar`, `PhoneFrame`, `QFLogo`)
 - `layouts/` - Route shells (`AppLayout`, `GuestLayout`)
 - `services/` - API transport and future domain service functions
-- `stores/` - Redux store setup and future global state slices
 - `types/` - Shared TypeScript contracts and UI type unions
 - `hooks/` - Reusable React hooks
 - `lib/` - Pure utilities (`cn`, time formatting, hashing)
@@ -248,21 +245,14 @@ Use the lightest state mechanism that satisfies the scope.
    - Default for forms, tabs, selected rows, modal visibility, mock data mutation, and loading flags
 2. **Custom hooks**
    - Reusable behavior with lifecycle concerns, such as timers (`src/hooks/use-tick.ts`)
-3. **Redux Toolkit**
-   - Use only for cross-screen workflows or structured app state that many screens edit
-4. **Zustand**
-   - Installed but unused; introduce only if the app needs a small app-wide store and Redux would be too heavy
+3. **Zustand**
+   - Installed but not yet wired in. Use it for cross-screen workflows or structured app state that several screens edit (auth/profile, active organization, sidebar collapse, etc.)
 
-Current Redux setup:
-- Store root: `src/stores/store.ts`
-- Typed hooks: `useAppDispatch`, `useAppSelector`
-- Placeholder reducer: `_init`
-
-Redux rules when adding real slices:
-1. Create the slice near store ownership, for example `src/stores/authStore.ts`
-2. Register it in `rootReducer`
-3. Export typed selectors/actions from the slice file
-4. Keep transient page state out of Redux
+Zustand rules when adding the first store:
+1. Create `src/stores/` and add a store file per concern, e.g. `src/stores/auth-store.ts`
+2. Export a typed `useXStore` hook from the file, plus narrow selector hooks where helpful
+3. Keep transient page state (form drafts, modal open flags) out of global stores
+4. Never read or write `localStorage` from views — encapsulate that inside the store or service layer
 
 ---
 
@@ -585,5 +575,5 @@ When making changes with AI assistance:
 Default decision rule:
 - If code is only useful to one screen, keep it near that screen
 - If code is reused by multiple feature groups, promote it to `components`, `hooks`, `lib`, or `types`
-- If behavior crosses routes or sessions, consider store-level state
+- If behavior crosses routes or sessions, add a Zustand store under `src/stores/` (created on demand — the folder is intentionally absent until needed)
 
