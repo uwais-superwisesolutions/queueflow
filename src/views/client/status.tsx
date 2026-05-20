@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { PhoneFrame } from '@/components/layout';
 import { Icon, Button, Card, SkeletonBox, SkeletonLine, useConfirm } from '@/components/ui';
 import { useTick } from '@/hooks/use-tick';
+import { usePolling } from '@/hooks/use-polling';
+import { POLL_INTERVAL_MS } from '@/lib/realtime-channels';
 import { formatHMS } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { getApiErrorMessage } from '@/lib/api-error';
@@ -25,8 +27,6 @@ const ACTIVE_STATUSES = new Set<BookingStatus>([
   'checked_in',
   'in_service',
 ]);
-
-const POLL_MS = 8_000;
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -85,11 +85,9 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
      
   }, [bookingId]);
 
-  useEffect(() => {
-    const id = window.setInterval(() => void refresh(), POLL_MS);
-    return () => window.clearInterval(id);
-     
-  }, []);
+  // Stand-in for the `booking:{bookingId}` Supabase Realtime channel — see
+  // REALTIME_CHANNELS.md §5. Phase 1: poll /api/client/bookings/me.
+  usePolling(refresh, POLL_INTERVAL_MS.bookingStatus);
 
   const handleCancel = async () => {
     if (!booking) return;

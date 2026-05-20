@@ -15,6 +15,8 @@ import {
 } from '@/components/ui';
 import { ProfileMenu, TopBar } from '@/components/layout';
 import { useTick } from '@/hooks/use-tick';
+import { usePolling } from '@/hooks/use-polling';
+import { POLL_INTERVAL_MS } from '@/lib/realtime-channels';
 import { formatHMS } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { getApiErrorMessage } from '@/lib/api-error';
@@ -50,9 +52,6 @@ interface OrgUserQueueScreenProps {
   /** Called when the user clicks "Sign out" from the profile menu. */
   onSignOut?: () => void;
 }
-
-const REFRESH_INTERVAL_MS = 15_000;
-const HEARTBEAT_INTERVAL_MS = 30_000;
 
 const EMPTY_QUEUE: QueueResponse = {
   pendingApproval: [],
@@ -157,22 +156,19 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
     };
   }, []);
 
-  // Poll the queue every 15s.
-  useEffect(() => {
-    const id = window.setInterval(() => void fetchQueue(), REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(id);
-  }, [fetchQueue]);
+  // Stand-in for the `seat:{seatId}:queue` Supabase Realtime channel — see
+  // REALTIME_CHANNELS.md §4. Phase 1: poll the REST endpoint instead.
+  usePolling(fetchQueue, POLL_INTERVAL_MS.seatQueue);
 
-  // Send heartbeat every 30s while on screen.
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      heartbeat().catch(() => {
-        /* heartbeat failures are non-fatal; the background timer will end the
-           shift if it stays silent for 5 min. */
-      });
-    }, HEARTBEAT_INTERVAL_MS);
-    return () => window.clearInterval(id);
-  }, []);
+  // Heartbeat keeps the active seat_assignment alive. Failures are non-fatal:
+  // the backend's SeatHeartbeatChecker auto-ends after ~5 min of silence.
+  usePolling(async () => {
+    try {
+      await heartbeat();
+    } catch {
+      /* swallowed — see comment above */
+    }
+  }, POLL_INTERVAL_MS.heartbeat);
 
   const handleAction = async (
     bookingId: string,

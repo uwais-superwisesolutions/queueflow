@@ -5,6 +5,8 @@ import { Icon, Button, Card, Pill, Avatar, Kpi, SkeletonBox, SkeletonLine } from
 import { ProfileMenu, Sidebar, TopBar } from '@/components/layout';
 import { agoLabel } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { usePolling } from '@/hooks/use-polling';
+import { POLL_INTERVAL_MS } from '@/lib/realtime-channels';
 import { useAuthStore } from '@/stores/authStore';
 import { useClientAuthStore } from '@/stores/clientAuthStore';
 import { getApiErrorMessage } from '@/lib/api-error';
@@ -242,11 +244,9 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
     };
   }, []);
 
-  // Poll active sessions every 30s to keep the seat-claimed-by tiles live.
-  useEffect(() => {
-    const id = window.setInterval(refreshSessions, 30_000);
-    return () => window.clearInterval(id);
-  }, []);
+  // Stand-in for the `org:{orgId}:dashboard` Supabase Realtime channel — see
+  // REALTIME_CHANNELS.md §3. Phase 1: poll /secure/sessions/active.
+  usePolling(refreshSessions, POLL_INTERVAL_MS.orgDashboard);
 
   const sessionsBySeat = useMemo(() => {
     const m = new Map<string, ActiveSessionResponse>();
