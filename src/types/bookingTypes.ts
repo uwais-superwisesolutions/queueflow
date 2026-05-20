@@ -13,6 +13,7 @@ export interface BookingResponse {
   id: string;
   orgId: string;
   clientId: string | null;
+  clientName: string | null;
   orgMemberId: string | null;
   seatId: string | null;
   timeslotTypeId: string | null;
