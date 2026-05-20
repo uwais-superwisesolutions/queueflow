@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Dev/SWSAIWeek/umar-uwais-ai-week-backend/**)",
+      "Bash(dotnet build *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

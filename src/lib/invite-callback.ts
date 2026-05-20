@@ -1,0 +1,93 @@
+/**
+ * Supabase's invite email sends users to <site>/#access_token=...&type=invite&...
+ *
+ * The hash fragment is opaque to React Router (we use createBrowserRouter, not
+ * the hash router). This module runs once during bootstrap, detects an invite
+ * callback, stows the access + refresh tokens in localStorage so the axios
+ * interceptor can use them, drops a sessionStorage flag so `/accept-invite`
+ * knows to start at the password step, and rewrites the URL so the hash
+ * doesn't linger in the address bar.
+ *
+ * Only `type=invite` is consumed today. The same hash shape is also produced by
+ * Supabase's password-reset and email-change flows — those can hook in here
+ * later by checking `params.get('type')`.
+ */
+
+const ORG_TOKEN_KEY = 'token';
+const ORG_REFRESH_TOKEN_KEY = 'refresh_token';
+export const INVITE_PENDING_FLAG = 'invite-callback:pending';
+
+interface DecodedInvitePayload {
+  email?: string;
+  sub?: string;
+  user_metadata?: {
+    org_id?: string;
+    role?: string;
+  };
+}
+
+function decodeJwtPayload(token: string): DecodedInvitePayload | null {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) return null;
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '==='.slice((base64.length + 3) % 4);
+    const json = atob(padded);
+    return JSON.parse(json) as DecodedInvitePayload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns true if an invite callback was detected and handled. Call BEFORE the
+ * router mounts. Side effects: writes to localStorage + sessionStorage and
+ * rewrites the URL.
+ */
+export function consumeInviteCallback(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const hash = window.location.hash;
+  if (!hash.startsWith('#') || !hash.includes('access_token=')) return false;
+
+  const params = new URLSearchParams(hash.slice(1));
+  if (params.get('type') !== 'invite') return false;
+
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (!accessToken) return false;
+
+  localStorage.setItem(ORG_TOKEN_KEY, accessToken);
+  if (refreshToken) localStorage.setItem(ORG_REFRESH_TOKEN_KEY, refreshToken);
+
+  // Decode the JWT to seed the auth-store profile with what we can (email,
+  // userId). The org_members row only exists after AcceptInvite, so org name
+  // / member id come later — this is a partial seed, not a full session.
+  const claims = decodeJwtPayload(accessToken);
+  if (claims) {
+    const profile = {
+      userId: claims.sub ?? null,
+      email: claims.email ?? null,
+      fullName: null,
+      organisationId: claims.user_metadata?.org_id ?? null,
+      organisationName: null,
+      orgMemberId: null,
+      role: claims.user_metadata?.role ?? null,
+      onboardingComplete: false,
+    };
+    localStorage.setItem('auth', JSON.stringify(profile));
+  }
+
+  sessionStorage.setItem(INVITE_PENDING_FLAG, '1');
+
+  // Drop the hash from the URL — leaves `/` clean. Use replaceState so we
+  // don't push a history entry.
+  const cleanUrl = `${window.location.pathname}${window.location.search}`;
+  window.history.replaceState(null, '', cleanUrl);
+
+  // Redirect to the accept-invite flow. The hash is already stripped above,
+  // so a soft navigation is enough.
+  window.history.replaceState(null, '', '/accept-invite');
+
+  return true;
+}
