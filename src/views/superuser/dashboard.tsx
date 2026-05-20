@@ -13,9 +13,15 @@ import { getApiErrorMessage } from '@/lib/api-error';
 import { listDepartments } from '@/services/departmentApi';
 import { listSeats } from '@/services/seatApi';
 import { listActiveSessions } from '@/services/sessionApi';
+import { getQueue } from '@/services/queueBookingApi';
+import { getMembers } from '@/services/organisationApi';
 import type {
   ActiveSessionResponse,
+  BookingResponse,
+  BookingStatus,
   DepartmentResponse,
+  MemberResponse,
+  QueueResponse,
   SeatResponse,
   SidebarNavItem,
 } from '@/types';
@@ -147,7 +153,7 @@ export function SuperUserDashboard({
         {active === 'timeslots' && <TimeslotsView />}
         {active === 'links'     && <PortalLinksView onOpenClientPortal={onOpenClientPortal} />}
         {active === 'analytics' && <AnalyticsView />}
-        {active === 'queues'    && <QueuesPlaceholder />}
+        {active === 'queues'    && <QueuesView />}
         {active === 'settings'  && <SettingsView />}
         {active === 'billing'   && <BillingPlaceholder />}
       </main>
@@ -155,16 +161,245 @@ export function SuperUserDashboard({
   );
 }
 
-function QueuesPlaceholder() {
+// Org-wide queue view — every active booking across every seat, grouped by
+// org_member. Reads /secure/bookings (M5) + /secure/organisations/members (M0).
+// Polls on the same cadence as the SU dashboard.
+function QueuesView() {
+  const [queue, setQueue] = useState<QueueResponse | null>(null);
+  const [members, setMembers] = useState<MemberResponse[]>([]);
+  const [seats, setSeats] = useState<SeatResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<number>(Date.now());
+
+  const refresh = async () => {
+    try {
+      const queueRes = await getQueue();
+      setQueue(queueRes.data);
+      setUpdatedAt(Date.now());
+    } catch {
+      // best-effort
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [queueRes, membersRes, seatsRes] = await Promise.all([
+          getQueue(),
+          getMembers(),
+          listSeats(),
+        ]);
+        if (cancelled) return;
+        setQueue(queueRes.data);
+        setMembers(membersRes.data);
+        setSeats(seatsRes.data);
+        setUpdatedAt(Date.now());
+      } catch (err) {
+        if (!cancelled) setError(getApiErrorMessage(err, 'Could not load queues.'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  usePolling(refresh, POLL_INTERVAL_MS.orgDashboard);
+
+  const memberById = useMemo(() => {
+    const m = new Map<string, MemberResponse>();
+    for (const x of members) m.set(x.orgMemberId, x);
+    return m;
+  }, [members]);
+  const seatNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of seats) m.set(s.id, s.name);
+    return m;
+  }, [seats]);
+
+  // Flatten every booking once, then group by org_member.
+  type Group = { orgMemberId: string; memberName: string; bookings: BookingResponse[] };
+  const groups = useMemo<Group[]>(() => {
+    if (!queue) return [];
+    const all: BookingResponse[] = [
+      ...queue.pendingApproval,
+      ...queue.scheduled,
+      ...queue.checkedIn,
+      ...queue.inService,
+    ];
+    const byMember = new Map<string, BookingResponse[]>();
+    const unassigned: BookingResponse[] = [];
+    for (const b of all) {
+      if (b.orgMemberId) {
+        const arr = byMember.get(b.orgMemberId) ?? [];
+        arr.push(b);
+        byMember.set(b.orgMemberId, arr);
+      } else {
+        unassigned.push(b);
+      }
+    }
+    const out: Group[] = Array.from(byMember.entries()).map(([orgMemberId, bookings]) => ({
+      orgMemberId,
+      memberName: memberById.get(orgMemberId)?.fullName ?? 'Unknown member',
+      bookings: bookings.sort((a, b) =>
+        a.scheduledStartAt.localeCompare(b.scheduledStartAt),
+      ),
+    }));
+    if (unassigned.length > 0) {
+      out.push({
+        orgMemberId: '__unassigned__',
+        memberName: 'Unassigned',
+        bookings: unassigned.sort((a, b) =>
+          a.scheduledStartAt.localeCompare(b.scheduledStartAt),
+        ),
+      });
+    }
+    out.sort((a, b) => a.memberName.localeCompare(b.memberName));
+    return out;
+  }, [queue, memberById]);
+
+  const totalActive =
+    (queue?.pendingApproval.length ?? 0) +
+    (queue?.scheduled.length ?? 0) +
+    (queue?.checkedIn.length ?? 0) +
+    (queue?.inService.length ?? 0);
+
   return (
     <>
-      <TopBar title="Queues" subtitle="All live queues across your org." />
-      <div className="flex-1 overflow-auto p-6 qf-scroll">
-        <Card style={{ padding: 32, textAlign: 'center' }} className="text-ink-3">
-          Org-wide queues view — see the per-seat tiles on the Dashboard.
-        </Card>
+      <TopBar
+        title="Queues"
+        subtitle="All live queues across your org."
+        right={
+          <div className="flex gap-2 items-center">
+            <span className="flex items-center gap-1.5 text-[12px] text-ink-3">
+              <span className="qf-live-dot" />
+              Live
+            </span>
+            <span className="text-[11.5px] text-ink-3">Updated {agoLabel(updatedAt)}</span>
+            <Button variant="ghost" icon="refresh" onClick={refresh}>Refresh</Button>
+          </div>
+        }
+      />
+      <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
+        {error && (
+          <div
+            className="flex items-center gap-[10px] px-3.5 py-[10px] rounded-[10px] border mb-4"
+            style={{
+              background: 'var(--coral-tint)',
+              borderColor: 'color-mix(in oklab, var(--coral) 30%, transparent)',
+            }}
+            role="alert"
+          >
+            <Icon name="alert" size={14} className="text-coral" />
+            <span className="text-[12.5px]">{error}</span>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} padding={16}>
+                <SkeletonLine w="50%" h={13} />
+                <SkeletonLine w="80%" h={11} className="mt-2" />
+                <SkeletonLine w="70%" h={11} className="mt-1.5" />
+              </Card>
+            ))}
+          </div>
+        ) : totalActive === 0 ? (
+          <Card padding={32} className="text-center text-ink-3">
+            No active bookings right now.
+          </Card>
+        ) : (
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+            {groups.map((g) => (
+              <QueueGroupCard
+                key={g.orgMemberId}
+                memberName={g.memberName}
+                bookings={g.bookings}
+                seatNameById={seatNameById}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </>
+  );
+}
+
+const STATUS_TONE_MAP: Record<BookingStatus, 'amber' | 'blue' | 'teal' | 'success' | 'neutral' | 'coral'> = {
+  pending_approval: 'amber',
+  scheduled: 'blue',
+  checked_in: 'teal',
+  in_service: 'teal',
+  completed: 'success',
+  rejected: 'coral',
+  cancelled: 'neutral',
+  no_show: 'coral',
+  expired: 'neutral',
+};
+
+const STATUS_LABEL: Record<BookingStatus, string> = {
+  pending_approval: 'Pending',
+  scheduled: 'Scheduled',
+  checked_in: 'Checked in',
+  in_service: 'In service',
+  completed: 'Completed',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+  no_show: 'No-show',
+  expired: 'Expired',
+};
+
+function fmtBookingTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+interface QueueGroupCardProps {
+  memberName: string;
+  bookings: BookingResponse[];
+  seatNameById: Map<string, string>;
+}
+
+function QueueGroupCard({ memberName, bookings, seatNameById }: QueueGroupCardProps) {
+  return (
+    <Card padding={0}>
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-line">
+        <Avatar name={memberName} size={26} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[13.5px] font-medium truncate">{memberName}</div>
+          <div className="text-[11px] text-ink-3">{bookings.length} active</div>
+        </div>
+      </div>
+      <div>
+        {bookings.map((b, i) => (
+          <div
+            key={b.id}
+            className={cn(
+              'px-4 py-2.5 flex items-center gap-2.5',
+              i < bookings.length - 1 && 'border-b border-line',
+            )}
+          >
+            <div className="flex-1 min-w-0">
+              <div className="text-[12.5px] text-ink-2 leading-[1.45] truncate">
+                {fmtBookingTime(b.scheduledStartAt)}
+                {b.seatId && (
+                  <span className="text-ink-3"> · {seatNameById.get(b.seatId) ?? 'seat'}</span>
+                )}
+              </div>
+              {b.clientReason && (
+                <div className="text-[11px] text-ink-4 truncate">{b.clientReason}</div>
+              )}
+            </div>
+            <Pill tone={STATUS_TONE_MAP[b.status]}>{STATUS_LABEL[b.status]}</Pill>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -203,14 +438,16 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
   const [seats, setSeats] = useState<SeatResponse[]>([]);
   const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
   const [sessions, setSessions] = useState<ActiveSessionResponse[]>([]);
+  const [queue, setQueue] = useState<QueueResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number>(Date.now());
 
-  const refreshSessions = async () => {
+  const refreshLive = async () => {
     try {
-      const resp = await listActiveSessions();
-      setSessions(resp.data.sessions);
+      const [sessionsRes, queueRes] = await Promise.all([listActiveSessions(), getQueue()]);
+      setSessions(sessionsRes.data.sessions);
+      setQueue(queueRes.data);
       setUpdatedAt(Date.now());
     } catch {
       // best-effort poll; keep previous data on transient errors
@@ -223,15 +460,17 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
       setLoading(true);
       setError(null);
       try {
-        const [seatsRes, deptsRes, sessionsRes] = await Promise.all([
+        const [seatsRes, deptsRes, sessionsRes, queueRes] = await Promise.all([
           listSeats(),
           listDepartments(),
           listActiveSessions(),
+          getQueue(),
         ]);
         if (cancelled) return;
         setSeats([...seatsRes.data].sort((a, b) => a.displayOrder - b.displayOrder));
         setDepartments(deptsRes.data);
         setSessions(sessionsRes.data.sessions);
+        setQueue(queueRes.data);
         setUpdatedAt(Date.now());
       } catch (err) {
         if (!cancelled) setError(getApiErrorMessage(err, 'Could not load dashboard.'));
@@ -245,8 +484,8 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
   }, []);
 
   // Stand-in for the `org:{orgId}:dashboard` Supabase Realtime channel — see
-  // REALTIME_CHANNELS.md §3. Phase 1: poll /secure/sessions/active.
-  usePolling(refreshSessions, POLL_INTERVAL_MS.orgDashboard);
+  // REALTIME_CHANNELS.md §3. Phase 1: poll /secure/sessions/active + /secure/bookings.
+  usePolling(refreshLive, POLL_INTERVAL_MS.orgDashboard);
 
   const sessionsBySeat = useMemo(() => {
     const m = new Map<string, ActiveSessionResponse>();
@@ -279,6 +518,45 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
     month: 'long',
   });
 
+  // ─────────────────────────────────────────────────────────────
+  // KPI derivations from /secure/bookings (the queue endpoint).
+  // The endpoint only returns active statuses, so "Bookings today"
+  // counts everything scheduled for today across the four sections.
+  // ─────────────────────────────────────────────────────────────
+  const inQueueNow = queue
+    ? queue.pendingApproval.length +
+      queue.scheduled.length +
+      queue.checkedIn.length +
+      queue.inService.length
+    : 0;
+
+  const avgWaitMinutes = useMemo(() => {
+    if (!queue || queue.checkedIn.length === 0) return null;
+    const nowMs = Date.now();
+    const waits = queue.checkedIn.map((b) =>
+      Math.max(0, (nowMs - new Date(b.scheduledStartAt).getTime()) / 60_000),
+    );
+    return Math.round(waits.reduce((sum, w) => sum + w, 0) / waits.length);
+  }, [queue]);
+
+  const bookingsToday = useMemo(() => {
+    if (!queue) return 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const isToday = (b: BookingResponse) => {
+      const d = new Date(b.scheduledStartAt).getTime();
+      return d >= today.getTime() && d < tomorrow.getTime();
+    };
+    return (
+      queue.pendingApproval.filter(isToday).length +
+      queue.scheduled.filter(isToday).length +
+      queue.checkedIn.filter(isToday).length +
+      queue.inService.filter(isToday).length
+    );
+  }, [queue]);
+
   return (
     <>
       <TopBar
@@ -290,7 +568,7 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
               <span className="qf-live-dot" />
               Live
             </span>
-            <Button variant="ghost" icon="refresh" onClick={refreshSessions}>Refresh</Button>
+            <Button variant="ghost" icon="refresh" onClick={refreshLive}>Refresh</Button>
             <Button variant="primary" icon="link" onClick={() => setActive('links')}>
               Get join link
             </Button>
@@ -332,9 +610,25 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
                     hint="now"
                     tone={activeCount === 0 ? 'neutral' : 'teal'}
                   />
-                  <Kpi label="In queue now" value="—" sub="across all seats" hint="not wired" />
-                  <Kpi label="Avg wait today" value="—" sub="min" hint="not wired" />
-                  <Kpi label="Bookings today" value="—" sub="not wired" hint="" />
+                  <Kpi
+                    label="In queue now"
+                    value={String(inQueueNow)}
+                    sub="across all seats"
+                    hint="live"
+                    tone={inQueueNow === 0 ? 'neutral' : 'teal'}
+                  />
+                  <Kpi
+                    label="Avg wait now"
+                    value={avgWaitMinutes === null ? '—' : String(avgWaitMinutes)}
+                    sub="min"
+                    hint={avgWaitMinutes === null ? 'no checked-in clients' : 'checked-in clients'}
+                  />
+                  <Kpi
+                    label="Bookings today"
+                    value={String(bookingsToday)}
+                    sub="active"
+                    hint="incl. pending"
+                  />
                 </>
               )}
             </div>

@@ -19,6 +19,8 @@ export interface ConfirmationDeparture {
 
 interface ClientConfirmationScreenProps {
   slot: SlotResponse;
+  /** Optional reason-for-visit captured on /client/details for new clients. */
+  clientReason?: string | null;
   onResolved: (departure: ConfirmationDeparture) => void;
   onPickAnother: () => void;
 }
@@ -33,7 +35,7 @@ function durationMin(slot: SlotResponse): number {
   return Math.round((new Date(slot.endAt).getTime() - new Date(slot.startAt).getTime()) / 60_000);
 }
 
-export function ClientConfirmationScreen({ slot, onResolved, onPickAnother }: ClientConfirmationScreenProps) {
+export function ClientConfirmationScreen({ slot, clientReason, onResolved, onPickAnother }: ClientConfirmationScreenProps) {
   const [booking, setBooking] = useState<BookingResponse | null>(null);
   const [creating, setCreating] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export function ClientConfirmationScreen({ slot, onResolved, onPickAnother }: Cl
           orgMemberId: slot.orgMemberId,
           timeslotTypeId: slot.timeslotTypeId,
           scheduledStartAt: slot.startAt,
+          clientReason: clientReason ?? null,
         });
         setBooking(resp.data);
       } catch (err) {
@@ -76,7 +79,7 @@ export function ClientConfirmationScreen({ slot, onResolved, onPickAnother }: Cl
         setCreating(false);
       }
     })();
-  }, [slot]);
+  }, [slot, clientReason]);
 
   // Live countdown for the soft-hold.
   useEffect(() => {

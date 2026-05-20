@@ -131,7 +131,14 @@ function ClientOTPRoute() {
 }
 function ClientNewDetailsRoute() {
   const navigate = useNavigate()
-  return <ClientNewDetailsScreen onContinue={() => navigate('/client/slots')} onBack={() => navigate('/client/otp')} />
+  return (
+    <ClientNewDetailsScreen
+      onContinue={({ clientReason }) =>
+        navigate('/client/slots', { state: { clientReason } })
+      }
+      onBack={() => navigate('/client/otp')}
+    />
+  )
 }
 function ClientReturningRoute() {
   const navigate = useNavigate()
@@ -139,9 +146,15 @@ function ClientReturningRoute() {
 }
 function ClientSlotPickerRoute() {
   const navigate = useNavigate()
+  const location = useLocation()
+  // Forward the optional clientReason from /client/details through to /client/confirm.
+  const clientReason =
+    (location.state as { clientReason?: string | null } | null)?.clientReason ?? null
   return (
     <ClientSlotPickerScreen
-      onSelect={(sel) => navigate('/client/confirm', { state: { slot: sel.slot } })}
+      onSelect={(sel) =>
+        navigate('/client/confirm', { state: { slot: sel.slot, clientReason } })
+      }
       onBack={() => navigate('/client')}
     />
   )
@@ -149,11 +162,16 @@ function ClientSlotPickerRoute() {
 function ClientConfirmationRoute() {
   const navigate = useNavigate()
   const location = useLocation()
-  const slot = (location.state as { slot?: import('@/types').SlotResponse } | null)?.slot
+  const state = location.state as
+    | { slot?: import('@/types').SlotResponse; clientReason?: string | null }
+    | null
+  const slot = state?.slot
+  const clientReason = state?.clientReason ?? null
   if (!slot) return <Navigate to="/client/slots" replace />
   return (
     <ClientConfirmationScreen
       slot={slot}
+      clientReason={clientReason}
       onResolved={({ reason, booking }) => {
         if (reason === 'approved') {
           navigate('/client/status', { replace: true, state: { bookingId: booking.id } })
