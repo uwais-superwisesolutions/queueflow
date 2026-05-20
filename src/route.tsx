@@ -248,7 +248,6 @@ const router = createBrowserRouter([
       { path: '/dashboard/links',      element: wrap(<DashboardRoute initialPage="links" />) },
       { path: '/dashboard/analytics',  element: wrap(<DashboardRoute initialPage="analytics" />) },
       { path: '/dashboard/settings',   element: wrap(<DashboardRoute initialPage="settings" />) },
-      { path: '/dashboard/billing',    element: wrap(<DashboardRoute initialPage="billing" />) },
 
       // OrgUser
       { path: '/org',            element: wrap(<OrgUserDashboardRoute initialPage="queue" />) },

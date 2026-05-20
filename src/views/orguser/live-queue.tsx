@@ -311,6 +311,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
             fullName={fullName ?? ''}
             email={email}
             role={role}
+            direction="down"
             items={[
               {
                 id: 'logout',

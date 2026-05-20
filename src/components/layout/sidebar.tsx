@@ -4,6 +4,11 @@ import { Icon } from '@/components/ui/icon';
 import { QFLogo } from './qf-logo';
 import type { SidebarNavItem } from '@/types';
 
+// The org identity pill below the logo used to render a chevron + "2 locations"
+// subtitle, hinting at a dropdown / multi-tenant switcher. Neither exists in
+// Phase 1 (one org per user, no location concept on the backend), so it's
+// rendered as a static label.
+
 interface SidebarProps {
   items: SidebarNavItem[];
   active?: string;
@@ -29,7 +34,11 @@ export function Sidebar({
 
   return (
     <aside
-      className="w-[232px] flex-none bg-surface border-r border-line flex flex-col h-full"
+      // No explicit height — the parent layout uses min-h-screen, so default
+      // flex `align-items: stretch` makes the aside match the row's height.
+      // Using `h-full` here previously resolved against an `auto` parent and
+      // collapsed the sidebar to its content height.
+      className="w-[232px] flex-none bg-surface border-r border-line flex flex-col self-stretch"
     >
       <div className="p-4 pb-3">
         <QFLogo size={18} />
@@ -41,9 +50,7 @@ export function Sidebar({
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[12.5px] font-medium text-ink truncate">{orgName}</div>
-            <div className="text-[10.5px] text-ink-3">2 locations</div>
           </div>
-          <Icon name="chevronD" size={12} className="text-ink-3 flex-none" />
         </div>
       </div>
 

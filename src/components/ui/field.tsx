@@ -11,7 +11,11 @@ interface FieldProps extends LabelHTMLAttributes<HTMLLabelElement> {
 
 export function Field({ label, hint, error, children, className, ...rest }: FieldProps) {
   return (
-    <label className={cn('flex flex-col gap-1.5', className)} {...rest}>
+    // min-w-0 is critical when this <label> is itself a grid item (e.g. the
+    // 1fr/1fr name row on the sign-up form). Without it, the grid track
+    // expands to the input's intrinsic min-content width and the cell
+    // overflows its half of the row.
+    <label className={cn('flex flex-col gap-1.5 min-w-0', className)} {...rest}>
       {label && (
         <span className="text-[12.5px] text-ink-2 font-medium">{label}</span>
       )}
@@ -36,6 +40,10 @@ export function TextInput({ icon, error, wrapClassName, className, ...rest }: Te
     <span
       className={cn(
         'flex items-center gap-2 bg-surface border rounded-[8px] px-[10px] h-[38px]',
+        // min-w-0 lets this shrink below the <input>'s default intrinsic
+        // width when placed in a narrow grid cell (e.g. the 1fr/1fr name row
+        // on the sign-up form). Without it the input overflows the cell.
+        'min-w-0',
         'text-ink-3 transition-[border-color,box-shadow] duration-150',
         'focus-within:border-teal focus-within:shadow-[0_0_0_2px_var(--teal-tint)]',
         error ? 'border-coral' : 'border-line-2',
@@ -46,7 +54,7 @@ export function TextInput({ icon, error, wrapClassName, className, ...rest }: Te
       <input
         {...rest}
         className={cn(
-          'flex-1 h-full border-0 bg-transparent font-[inherit] text-ink outline-none p-0',
+          'flex-1 min-w-0 h-full border-0 bg-transparent font-[inherit] text-ink outline-none p-0',
           'placeholder:text-ink-4',
           className,
         )}

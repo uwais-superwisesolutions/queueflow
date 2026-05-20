@@ -146,6 +146,7 @@ export function OrgUserClaimScreen({ onClaim, onSignOut }: OrgUserClaimScreenPro
             fullName={fullName ?? ''}
             email={email}
             role={role}
+            direction="down"
             items={[
               {
                 id: 'logout',

@@ -36,6 +36,8 @@ import { getApiErrorMessage } from '@/lib/api-error';
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const UI_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon → Sun
 
+type ViewMode = 'day' | 'week' | 'month';
+
 interface PatternRow extends AvailabilityPattern {
   /** Local row key — server doesn't return pattern IDs. */
   uid: string;
@@ -68,7 +70,110 @@ function toMeridiem(time: string): string {
   return `${hour}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
+// ── Date helpers ─────────────────────────────────────────────────────────
+// All work on local-time Date instances. We never persist these — patterns
+// are recurring by day-of-week, so the calendar only uses dates for display
+// and navigation.
+
+function addDays(d: Date, n: number): Date {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  return out;
+}
+
+function addMonths(d: Date, n: number): Date {
+  const out = new Date(d);
+  out.setMonth(out.getMonth() + n);
+  return out;
+}
+
+function startOfWeek(d: Date): Date {
+  // Monday-anchored week (UI is Mon-first).
+  const out = new Date(d);
+  const dow = out.getDay(); // 0=Sun..6=Sat
+  const back = (dow + 6) % 7; // Mon→0, Sun→6
+  out.setDate(out.getDate() - back);
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
+function startOfMonth(d: Date): Date {
+  const out = new Date(d);
+  out.setDate(1);
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function weekDates(anchor: Date): Date[] {
+  const monday = startOfWeek(anchor);
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+}
+
+function monthGridDates(anchor: Date): Date[] {
+  // 6 rows × 7 cols, starting at the Monday on/before the 1st.
+  const first = startOfMonth(anchor);
+  const gridStart = startOfWeek(first);
+  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+}
+
+function monthLabel(d: Date): string {
+  return d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+}
+
+function dayLabel(d: Date): string {
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function weekRangeLabel(anchor: Date): string {
+  const days = weekDates(anchor);
+  const start = days[0];
+  const end = days[6];
+  const sameMonth = start.getMonth() === end.getMonth();
+  const startStr = start.toLocaleDateString(undefined, {
+    day: 'numeric',
+    ...(sameMonth ? {} : { month: 'short' }),
+  });
+  const endStr = end.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  return `${startStr} — ${endStr}`;
+}
+
+function rangeLabel(view: ViewMode, anchor: Date): string {
+  if (view === 'day') return dayLabel(anchor);
+  if (view === 'month') return monthLabel(anchor);
+  return weekRangeLabel(anchor);
+}
+
 export function AvailabilityView() {
+  const [anchorDate, setAnchorDate] = useState<Date>(() => new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
+
+  const shift = (direction: 1 | -1) => {
+    if (viewMode === 'day') setAnchorDate((d) => addDays(d, direction));
+    else if (viewMode === 'week') setAnchorDate((d) => addDays(d, 7 * direction));
+    else setAnchorDate((d) => addMonths(d, direction));
+  };
+
+  const today = () => setAnchorDate(new Date());
+  const todayLabel =
+    viewMode === 'day' ? 'Today' : viewMode === 'month' ? 'This month' : 'This week';
+
   return (
     <>
       <TopBar
@@ -77,37 +182,54 @@ export function AvailabilityView() {
         breadcrumb={['Dashboard', 'Availability']}
       />
       <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
-        <div
-          className="flex items-center gap-[10px] px-3.5 py-[10px] rounded-[10px] border mb-4"
-          style={{
-            background: 'var(--coral-tint)',
-            borderColor: 'color-mix(in oklab, var(--coral) 30%, transparent)',
-          }}
-          role="note"
-        >
-          <Icon name="alert" size={14} className="text-coral" />
-          <span className="text-[12.5px] text-coral-2 flex-1">
-            <b className="font-semibold">3 scheduled bookings</b> fall in newly-blocked hours.
-          </span>
-          <Button variant="secondary" size="sm">Review</Button>
-        </div>
-
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="sm" icon="chevronL" />
-            <Button variant="secondary" size="sm">This week</Button>
-            <Button variant="ghost" size="sm" icon="chevronR" />
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="chevronL"
+              onClick={() => shift(-1)}
+              aria-label="Previous"
+            />
+            <Button variant="secondary" size="sm" onClick={today}>
+              {todayLabel}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="chevronR"
+              onClick={() => shift(1)}
+              aria-label="Next"
+            />
           </div>
-          <span className="text-[13.5px] font-medium">18 — 24 May 2026</span>
+          <span className="text-[13.5px] font-medium">{rangeLabel(viewMode, anchorDate)}</span>
           <span className="flex-1" />
           <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="sm">Day</Button>
-            <Button variant="secondary" size="sm">Week</Button>
-            <Button variant="ghost" size="sm">Month</Button>
+            <Button
+              variant={viewMode === 'day' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('day')}
+            >
+              Day
+            </Button>
+            <Button
+              variant={viewMode === 'week' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('week')}
+            >
+              Week
+            </Button>
+            <Button
+              variant={viewMode === 'month' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('month')}
+            >
+              Month
+            </Button>
           </div>
         </div>
 
-        <RecurringSchedule />
+        <RecurringSchedule viewMode={viewMode} anchorDate={anchorDate} />
         <div className="h-5" />
         <Exceptions />
       </div>
@@ -119,7 +241,12 @@ export function AvailabilityView() {
 // Recurring weekly schedule
 // ─────────────────────────────────────────────────
 
-function RecurringSchedule() {
+interface RecurringScheduleProps {
+  viewMode: ViewMode;
+  anchorDate: Date;
+}
+
+function RecurringSchedule({ viewMode, anchorDate }: RecurringScheduleProps) {
   const [rows, setRows] = useState<PatternRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -151,10 +278,15 @@ function RecurringSchedule() {
     void reload();
   }, []);
 
-  const addWindow = (dayOfWeek: number, startTime = '09:00:00', endTime = '17:00:00') =>
+  const addWindows = (daysOfWeek: number[], startTime: string, endTime: string) =>
     setRows((prev) => [
       ...prev,
-      { uid: nextUid(), dayOfWeek, startTime, endTime },
+      ...daysOfWeek.map((dayOfWeek) => ({
+        uid: nextUid(),
+        dayOfWeek,
+        startTime,
+        endTime,
+      })),
     ]);
 
   const update = (uid: string, key: 'startTime' | 'endTime', uiValue: string) =>
@@ -244,9 +376,13 @@ function RecurringSchedule() {
             <div className="p-3">
               <ListLoadingSkeleton rows={6} />
             </div>
+          ) : viewMode === 'month' ? (
+            <MonthGrid rows={rows} anchorDate={anchorDate} />
           ) : (
             <WeekGrid
               rows={rows}
+              anchorDate={anchorDate}
+              singleDay={viewMode === 'day'}
               editingDay={editingDay}
               onSelectDay={(d) => setEditingDay(d)}
               onEditWindow={(uid, day) => {
@@ -263,9 +399,9 @@ function RecurringSchedule() {
       defaultDay={editingDay ?? UI_DAY_ORDER[0]}
       rows={rows}
       onClose={() => setShowAddWindow(false)}
-      onSubmit={(day, startTime, endTime) => {
-        addWindow(day, startTime, endTime);
-        setEditingDay(day);
+      onSubmit={(days, startTime, endTime) => {
+        addWindows(days, startTime, endTime);
+        if (days.length > 0) setEditingDay(days[0]);
         setShowAddWindow(false);
       }}
     />
@@ -292,11 +428,16 @@ function RecurringSchedule() {
 
 function WeekGrid({
   rows,
+  anchorDate,
+  singleDay,
   editingDay,
   onSelectDay,
   onEditWindow,
 }: {
   rows: PatternRow[];
+  anchorDate: Date;
+  /** Day view: render only the column for the day-of-week of anchorDate. */
+  singleDay?: boolean;
   editingDay: number | null;
   onSelectDay: (dayOfWeek: number) => void;
   onEditWindow: (uid: string, dayOfWeek: number) => void;
@@ -308,7 +449,19 @@ function WeekGrid({
     }
     return out;
   }, []);
-  const dates = [18, 19, 20, 21, 22, 23, 24];
+
+  const today = useMemo(() => new Date(), []);
+
+  // Dates and day-of-week values to render: 1 column for day view, 7 for week.
+  const visibleDates = useMemo<Date[]>(() => {
+    if (singleDay) return [anchorDate];
+    return weekDates(anchorDate);
+  }, [anchorDate, singleDay]);
+
+  const visibleDays = useMemo(
+    () => visibleDates.map((d) => d.getDay()),
+    [visibleDates],
+  );
 
   const dayRows = useMemo(() => {
     const m = new Map<number, PatternRow[]>();
@@ -320,29 +473,46 @@ function WeekGrid({
     return m;
   }, [rows]);
 
+  const cols = visibleDates.length;
+  const gridTemplateColumns = `56px repeat(${cols}, 1fr)`;
+
   return (
     <Card padding={0} className="overflow-hidden">
       <div
         className="grid border-b border-line bg-surface-2"
-        style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}
+        style={{ gridTemplateColumns }}
       >
         <div />
-        {UI_DAY_ORDER.map((d, i) => (
-          <div
-            key={d}
-            className="px-3 py-2 border-l border-line flex items-baseline gap-2"
-          >
-            <span className="text-[11.5px] text-ink-3 font-medium">{DAY_NAMES[i]}</span>
-            <span className={cn(
-              'tnum text-[14px] font-medium',
-              i === 0 ? 'text-teal' : 'text-ink',
-            )}>{dates[i]}</span>
-            {!dayRows.get(d)?.length && <Pill tone="neutral" className="ml-auto" style={{ fontSize: 10 }}>Off</Pill>}
-          </div>
-        ))}
+        {visibleDates.map((date, i) => {
+          const dow = visibleDays[i];
+          const isToday = isSameDay(date, today);
+          return (
+            <div
+              key={date.toISOString()}
+              className="px-3 py-2 border-l border-line flex items-baseline gap-2"
+            >
+              <span className="text-[11.5px] text-ink-3 font-medium">
+                {DAY_NAMES[UI_DAY_ORDER.indexOf(dow)]}
+              </span>
+              <span
+                className={cn(
+                  'tnum text-[14px] font-medium',
+                  isToday ? 'text-teal' : 'text-ink',
+                )}
+              >
+                {date.getDate()}
+              </span>
+              {!dayRows.get(dow)?.length && (
+                <Pill tone="neutral" className="ml-auto" style={{ fontSize: 10 }}>
+                  Off
+                </Pill>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
+      <div className="grid" style={{ gridTemplateColumns }}>
         <div>
           {slots.map((s, i) => (
             <div
@@ -360,7 +530,8 @@ function WeekGrid({
           ))}
         </div>
 
-        {UI_DAY_ORDER.map((d) => {
+        {visibleDates.map((date, colIdx) => {
+          const d = visibleDays[colIdx];
           const windows = dayRows.get(d) ?? [];
           const isWithin = (slotIdx: number) => {
             const minute = 8 * 60 + slotIdx * 30;
@@ -368,7 +539,7 @@ function WeekGrid({
           };
           return (
             <div
-              key={d}
+              key={date.toISOString()}
               onClick={() => onSelectDay(d)}
               className={cn('relative border-l border-line', editingDay === d && 'bg-surface-2/40')}
             >
@@ -419,6 +590,95 @@ function WeekGrid({
   );
 }
 
+function MonthGrid({
+  rows,
+  anchorDate,
+}: {
+  rows: PatternRow[];
+  anchorDate: Date;
+}) {
+  const today = useMemo(() => new Date(), []);
+  const dates = useMemo(() => monthGridDates(anchorDate), [anchorDate]);
+  const currentMonth = anchorDate.getMonth();
+
+  const dayRows = useMemo(() => {
+    const m = new Map<number, PatternRow[]>();
+    for (const d of UI_DAY_ORDER) m.set(d, []);
+    for (const r of rows) {
+      if (!m.has(r.dayOfWeek)) m.set(r.dayOfWeek, []);
+      m.get(r.dayOfWeek)!.push(r);
+    }
+    return m;
+  }, [rows]);
+
+  return (
+    <Card padding={0} className="overflow-hidden">
+      <div
+        className="grid border-b border-line bg-surface-2"
+        style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
+      >
+        {UI_DAY_ORDER.map((d, i) => (
+          <div
+            key={d}
+            className="px-3 py-2 border-l border-line first:border-l-0 text-[11.5px] text-ink-3 font-medium"
+          >
+            {DAY_NAMES[i]}
+          </div>
+        ))}
+      </div>
+
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: 'minmax(96px, auto)' }}
+      >
+        {dates.map((date, idx) => {
+          const dow = date.getDay();
+          const windows = dayRows.get(dow) ?? [];
+          const inMonth = date.getMonth() === currentMonth;
+          const isToday = isSameDay(date, today);
+          return (
+            <div
+              key={idx}
+              className={cn(
+                'border-l border-t border-line p-2 flex flex-col gap-1',
+                idx % 7 === 0 && 'border-l-0',
+                !inMonth && 'bg-surface-2/60',
+              )}
+            >
+              <span
+                className={cn(
+                  'tnum text-[12px] font-medium',
+                  isToday ? 'text-teal' : inMonth ? 'text-ink' : 'text-ink-4',
+                )}
+              >
+                {date.getDate()}
+              </span>
+              {windows.length === 0 ? (
+                <span className="text-[10.5px] text-ink-4">Off</span>
+              ) : (
+                windows.map((w) => (
+                  <div
+                    key={w.uid}
+                    className="rounded-[4px] px-1.5 py-[2px] text-[10px] leading-tight"
+                    style={{
+                      background: 'var(--teal-tint)',
+                      color: 'var(--teal-ink)',
+                      borderLeft: '2px solid var(--teal)',
+                    }}
+                    title={`${toUiTime(w.startTime)} → ${toUiTime(w.endTime)}`}
+                  >
+                    {toUiTime(w.startTime)}–{toUiTime(w.endTime)}
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 function AddWindowModal({
   open,
   defaultDay,
@@ -430,9 +690,10 @@ function AddWindowModal({
   defaultDay: number;
   rows: PatternRow[];
   onClose: () => void;
-  onSubmit: (dayOfWeek: number, startTime: string, endTime: string) => void;
+  /** Adds one window per selected day-of-week with the same time range. */
+  onSubmit: (daysOfWeek: number[], startTime: string, endTime: string) => void;
 }) {
-  const [day, setDay] = useState(String(defaultDay));
+  const [selectedDays, setSelectedDays] = useState<Set<number>>(() => new Set([defaultDay]));
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
   const [error, setError] = useState<string | null>(null);
@@ -448,11 +709,6 @@ function AddWindowModal({
     return out;
   }, []);
 
-  const dayRows = useMemo(
-    () => rows.filter((r) => r.dayOfWeek === Number(day)),
-    [rows, day],
-  );
-
   const startOptions = useMemo(() =>
     times.map((t) => ({ value: t, label: toMeridiem(t) })),
     [times],
@@ -465,7 +721,7 @@ function AddWindowModal({
 
   useEffect(() => {
     if (open) {
-      setDay(String(defaultDay));
+      setSelectedDays(new Set([defaultDay]));
       setStartTime(startOptions[0]?.value ?? '09:00');
       setEndTime(endOptions[0]?.value ?? '17:00');
       setError(null);
@@ -486,24 +742,54 @@ function AddWindowModal({
     }
   }, [open, endOptions, endTime]);
 
+  const toggleDay = (d: number) => {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d);
+      else next.add(d);
+      return next;
+    });
+  };
+
   const submit = () => {
+    if (selectedDays.size === 0) {
+      setError('Pick at least one day.');
+      return;
+    }
     if (toMinutes(startTime) >= toMinutes(endTime)) {
       setError('End time must be after start time.');
       return;
     }
     const start = toMinutes(startTime);
     const end = toMinutes(endTime);
-    const overlap = dayRows.some((r) => {
-      const rs = toMinutes(r.startTime);
-      const re = toMinutes(r.endTime);
-      return start < re && end > rs;
-    });
-    if (overlap) {
-      setError('This window overlaps an existing one.');
+
+    // Find any day where the new window would overlap an existing one — call
+    // it out by name so the user knows which selection to revisit.
+    const overlappingDays: number[] = [];
+    for (const day of selectedDays) {
+      const dayRows = rows.filter((r) => r.dayOfWeek === day);
+      const overlaps = dayRows.some((r) => {
+        const rs = toMinutes(r.startTime);
+        const re = toMinutes(r.endTime);
+        return start < re && end > rs;
+      });
+      if (overlaps) overlappingDays.push(day);
+    }
+
+    if (overlappingDays.length > 0) {
+      const names = overlappingDays
+        .map((d) => DAY_NAMES[UI_DAY_ORDER.indexOf(d)])
+        .join(', ');
+      setError(`This window overlaps an existing one on ${names}.`);
       return;
     }
+
     setError(null);
-    onSubmit(Number(day), toApiTime(startTime), toApiTime(endTime));
+    onSubmit(
+      Array.from(selectedDays),
+      toApiTime(startTime),
+      toApiTime(endTime),
+    );
   };
 
   if (!open) return null;
@@ -521,15 +807,29 @@ function AddWindowModal({
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Day">
-          <SelectInput
-            value={day}
-            onChange={(e) => setDay(e.target.value)}
-            options={UI_DAY_ORDER.map((d, i) => ({
-              value: String(d),
-              label: DAY_NAMES[i],
-            }))}
-          />
+        <Field label="Days" hint="Pick one or more days to apply this time range to.">
+          <div className="flex flex-wrap gap-1.5">
+            {UI_DAY_ORDER.map((d, i) => {
+              const on = selectedDays.has(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => toggleDay(d)}
+                  className={cn(
+                    'px-3 py-[7px] rounded-[8px] cursor-pointer text-[12.5px] font-medium',
+                    'border transition-[background,border-color,color] duration-100',
+                    on
+                      ? 'bg-teal-tint border-teal text-teal-ink'
+                      : 'bg-surface border-line-2 text-ink hover:bg-surface-2',
+                  )}
+                  aria-pressed={on}
+                >
+                  {DAY_NAMES[i]}
+                </button>
+              );
+            })}
+          </div>
         </Field>
         <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <Field label="From">

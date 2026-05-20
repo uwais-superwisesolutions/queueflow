@@ -32,17 +32,16 @@ import { SettingsView } from './settings';
 import { PortalLinksView } from './portal-links';
 import { AnalyticsView } from './management';
 
-const SU_NAV: SidebarNavItem[] = [
+const SU_NAV_BASE: SidebarNavItem[] = [
   { id: 'dashboard', label: 'Dashboard',           icon: 'grid' },
-  { id: 'queues',    label: 'Queues',              icon: 'users', count: 23 },
+  { id: 'queues',    label: 'Queues',              icon: 'users' },
   { id: 'orgusers',  label: 'Org users',           icon: 'users' },
   { id: 'seats',     label: 'Seats & departments', icon: 'chair' },
-  { id: 'timeslots', label: 'Timeslot types',      icon: 'clock' },
+  { id: 'timeslots', label: 'Configure Services',  icon: 'clock' },
   { id: 'links',     label: 'Client portal links', icon: 'link' },
   { id: 'analytics', label: 'Analytics',           icon: 'zap' },
   { heading: 'Workspace' },
   { id: 'settings',  label: 'Settings',            icon: 'settings' },
-  { id: 'billing',   label: 'Billing',             icon: 'shield' },
 ];
 
 const NAV_PATHS: Record<string, string> = {
@@ -54,7 +53,6 @@ const NAV_PATHS: Record<string, string> = {
   links:     '/dashboard/links',
   analytics: '/dashboard/analytics',
   settings:  '/dashboard/settings',
-  billing:   '/dashboard/billing',
 };
 
 const PATH_TO_NAV: Record<string, string> = Object.fromEntries(
@@ -108,13 +106,55 @@ export function SuperUserDashboard({
     return () => clearInterval(id);
   }, []);
 
+  // Queue-count badge for the "Queues" sidebar item. Polled independently of
+  // the inner views so the count is fresh on every tab, not just the two that
+  // already fetch the queue (DashboardBody / QueuesView).
+  const [queueCount, setQueueCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getQueue();
+        if (cancelled) return;
+        const total =
+          res.data.pendingApproval.length +
+          res.data.scheduled.length +
+          res.data.checkedIn.length +
+          res.data.inService.length;
+        setQueueCount(total);
+      } catch {
+        // Non-fatal — leave the badge hidden if the count can't be loaded.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  usePolling(async () => {
+    try {
+      const res = await getQueue();
+      const total =
+        res.data.pendingApproval.length +
+        res.data.scheduled.length +
+        res.data.checkedIn.length +
+        res.data.inService.length;
+      setQueueCount(total);
+    } catch { /* see above */ }
+  }, POLL_INTERVAL_MS.orgDashboard);
+
+  const navItems = useMemo<SidebarNavItem[]>(
+    () =>
+      SU_NAV_BASE.map((it) =>
+        it.id === 'queues' && queueCount != null ? { ...it, count: queueCount } : it,
+      ),
+    [queueCount],
+  );
+
   return (
     <div
       className="flex overflow-hidden"
       style={{ height: '100vh' }}
     >
       <Sidebar
-        items={SU_NAV}
+        items={navItems}
         active={active}
         onSelect={setActive}
         orgName={organisationName ?? undefined}
@@ -155,7 +195,6 @@ export function SuperUserDashboard({
         {active === 'analytics' && <AnalyticsView />}
         {active === 'queues'    && <QueuesView />}
         {active === 'settings'  && <SettingsView />}
-        {active === 'billing'   && <BillingPlaceholder />}
       </main>
     </div>
   );
@@ -400,32 +439,6 @@ function QueueGroupCard({ memberName, bookings, seatNameById }: QueueGroupCardPr
         ))}
       </div>
     </Card>
-  );
-}
-
-function BillingPlaceholder() {
-  return (
-    <>
-      <TopBar title="Billing" subtitle="Plan and seat usage." />
-      <div className="flex-1 overflow-auto p-6 qf-scroll">
-        <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr', maxWidth: 800 }}>
-          <Card padding={20}>
-            <Pill tone="teal">Trial</Pill>
-            <h3 className="text-[22px] font-medium mt-2.5 mb-1">9 days left</h3>
-            <p className="m-0 text-ink-3 text-[13px]">
-              Add a card to keep your team running after 27 May.
-            </p>
-            <Button variant="primary" className="mt-3.5">Add payment method</Button>
-          </Card>
-          <Card padding={20}>
-            <div className="text-[12px] text-ink-3">Estimated monthly</div>
-            <div className="tnum text-[28px] font-medium mt-1">R 2,940</div>
-            <p className="text-[12px] text-ink-3 mt-1 mb-3.5">6 seats × R 490 / month</p>
-            <Button variant="secondary" icon="link">Manage subscription</Button>
-          </Card>
-        </div>
-      </div>
-    </>
   );
 }
 
