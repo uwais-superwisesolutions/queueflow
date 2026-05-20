@@ -6,6 +6,10 @@ export * from './timeslotTypeTypes';
 export * from './availabilityTypes';
 export * from './publicHolidayTypes';
 export * from './clientTypes';
+export * from './slotTypes';
+export * from './bookingTypes';
+export * from './sessionTypes';
+export * from './portalLinkTypes';
 
 export type Tone = 'neutral' | 'teal' | 'amber' | 'blue' | 'coral' | 'success';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost' | 'outline' | 'teal-tint';
@@ -19,79 +23,7 @@ export type IconName =
   | 'building' | 'chair' | 'sparkles' | 'alert' | 'info'
   | 'dotsH' | 'filter' | 'download' | 'refresh' | 'logout' | 'qDots';
 
-export interface Department {
-  id: string;
-  name: string;
-}
-
-export interface Seat {
-  id: string;
-  name: string;
-  departmentId: string;
-  claimedBy?: string;
-  isActive: boolean;
-}
-
-export interface OrgUser {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'member';
-  seatId?: string;
-  status: 'active' | 'invited' | 'inactive';
-  joinedAt: string;
-}
-
-export interface TimeslotType {
-  id: string;
-  name: string;
-  durationMinutes: number;
-  color: string;
-  usageCount: number;
-}
-
-export type BookingStatus =
-  | 'pending_approval'
-  | 'approved'
-  | 'checked_in'
-  | 'in_service'
-  | 'completed'
-  | 'rejected'
-  | 'expired'
-  | 'no_show';
-
-export interface Booking {
-  id: string;
-  clientName: string;
-  clientPhone?: string;
-  timeslotType: string;
-  reason?: string;
-  status: BookingStatus;
-  seatId: string;
-  position: number;
-  requestedAt: string;
-  approvedAt?: string;
-  checkedInAt?: string;
-  serviceStartedAt?: string;
-  completedAt?: string;
-  heldUntil?: string;
-  estimatedDuration: number;
-}
-
-export interface QueueState {
-  inService: Booking | null;
-  checkedIn: Booking[];
-  pending: Booking[];
-  scheduled: Booking[];
-}
-
-export interface DailyStats {
-  served: number;
-  avgWait: number;
-  avgService: number;
-  noShows: number;
-}
-
+// UI nav model
 export interface NavItem {
   id: string;
   label: string;
@@ -108,26 +40,18 @@ export interface SidebarNavItem {
   heading?: string;
 }
 
-export interface ClientPortalLink {
-  id: string;
-  label: string;
-  scope: string;
-  url: string;
-  qrSeed: string;
-  usageCount: number;
-  createdAt: string;
+// Mock/decorative types that the unwired analytics + dashboard widgets still rely on.
+// These are NOT API shapes — they'll go away once analytics is wired.
+export interface DailyStats {
+  served: number;
+  avgWait: number;
+  avgService: number;
+  noShows: number;
 }
 
 export interface AnalyticsDataPoint {
   date: string;
   bookings: number;
-}
-
-export interface WeekAvailability {
-  dayIndex: number;
-  startHour: number;
-  endHour: number;
-  hasConflict?: boolean;
 }
 
 export interface Notification {

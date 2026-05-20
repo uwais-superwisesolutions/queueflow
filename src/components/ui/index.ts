@@ -5,6 +5,7 @@ export { Avatar } from './avatar';
 export { Pill } from './pill';
 export { Field, TextInput, SelectInput } from './field';
 export { Modal } from './modal';
+export { ConfirmProvider, useConfirm, type ConfirmOptions } from './confirm-dialog';
 export { Kpi } from './kpi';
 export { QRPlaceholder } from './qr-placeholder';
 export { QRCode } from './qr-code';

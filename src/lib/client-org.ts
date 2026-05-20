@@ -1,37 +1,37 @@
+import { scanPortalLink } from '@/services/portalLinkApi';
+import type { PortalScanResponse } from '@/types';
+
 /**
  * Resolves the org the client portal is currently targeting.
  *
- * Lookup order:
- *   1. `?org=<uuid>` on the current URL — set by a portal-link landing page.
+ * Lookup order (synchronous fast path):
+ *   1. `?org=<uuid>` on the current URL — useful for dev & internal previews.
  *   2. localStorage cache (so the user can navigate within the portal).
  *   3. `VITE_DEFAULT_CLIENT_ORG_ID` env var — dev/testing fallback.
  *
- * Returns `null` if none of those resolve.
- *
- * M7 (portal links) will replace this with a server-side lookup that resolves
- * a slug to org metadata. For now this thin helper is enough.
+ * For the real-world entry point (a `?slug=<slug>` portal-link URL),
+ * use `resolvePortalScan()` which hits `POST /api/client/portal-links/{slug}/scan`,
+ * bumps the scan count, caches the result, and returns the full metadata.
  */
 
-const STORAGE_KEY = 'client_org_id';
+const ORG_KEY = 'client_org_id';
+const SCAN_KEY = 'client_portal_scan';
 
-function readQueryParam(): string | null {
+function param(name: string): string | null {
   if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  const value = params.get('org');
+  const value = new URLSearchParams(window.location.search).get(name);
   return value && value.trim().length > 0 ? value.trim() : null;
 }
 
 export function resolveClientOrgId(): string | null {
-  const fromQuery = readQueryParam();
+  const fromQuery = param('org');
   if (fromQuery) {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, fromQuery);
-    }
+    if (typeof window !== 'undefined') window.localStorage.setItem(ORG_KEY, fromQuery);
     return fromQuery;
   }
 
   if (typeof window !== 'undefined') {
-    const cached = window.localStorage.getItem(STORAGE_KEY);
+    const cached = window.localStorage.getItem(ORG_KEY);
     if (cached) return cached;
   }
 
@@ -39,7 +39,45 @@ export function resolveClientOrgId(): string | null {
   return fallback && fallback.trim().length > 0 ? fallback : null;
 }
 
-export function clearClientOrgId() {
+export function getCachedPortalScan(): PortalScanResponse | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(SCAN_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PortalScanResponse;
+  } catch {
+    return null;
+  }
+}
+
+function persistScan(scan: PortalScanResponse) {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.setItem(SCAN_KEY, JSON.stringify(scan));
+  window.localStorage.setItem(ORG_KEY, scan.orgId);
+}
+
+/**
+ * If the current URL has `?slug=<slug>`, hits the scan endpoint and caches the
+ * resulting org metadata. Returns the cached metadata otherwise. Returns null
+ * if neither slug nor cache is available.
+ */
+export async function resolvePortalScan(): Promise<PortalScanResponse | null> {
+  const slug = param('slug');
+  if (slug) {
+    try {
+      const resp = await scanPortalLink(slug);
+      persistScan(resp.data);
+      return resp.data;
+    } catch {
+      // Fall through to cache — a stale cached org is better than nothing if
+      // the user is offline / the slug is invalid.
+    }
+  }
+  return getCachedPortalScan();
+}
+
+export function clearClientOrg() {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(ORG_KEY);
+  window.localStorage.removeItem(SCAN_KEY);
 }

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { AuthResponse, MemberRole } from '@/types';
 
 const TOKEN_KEY = 'token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
 const PROFILE_KEY = 'auth';
 
 interface AuthProfile {
@@ -17,6 +18,8 @@ interface AuthProfile {
 
 interface AuthState extends AuthProfile {
   setSession: (auth: AuthResponse) => void;
+  /** Update just the access + refresh tokens (used after a silent refresh). */
+  setTokens: (accessToken: string, refreshToken: string) => void;
   setOnboardingComplete: (value: boolean) => void;
   setOrganisationName: (name: string) => void;
   clear: () => void;
@@ -56,6 +59,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setSession: (auth) => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(TOKEN_KEY, auth.accessToken);
+      if (auth.refreshToken) {
+        window.localStorage.setItem(REFRESH_TOKEN_KEY, auth.refreshToken);
+      }
     }
     const next: AuthProfile = {
       userId: auth.userId,
@@ -69,6 +75,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     };
     persistProfile(next);
     set(next);
+  },
+
+  setTokens: (accessToken, refreshToken) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(TOKEN_KEY, accessToken);
+    if (refreshToken) {
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    }
   },
 
   setOnboardingComplete: (value) => {
@@ -108,6 +122,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   clear: () => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(TOKEN_KEY);
+      window.localStorage.removeItem(REFRESH_TOKEN_KEY);
       window.localStorage.removeItem(PROFILE_KEY);
     }
     set(EMPTY_PROFILE);

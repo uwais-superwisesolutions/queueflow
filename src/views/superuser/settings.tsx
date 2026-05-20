@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react';
-import { Button, Card, Field, Icon, Modal, TextInput } from '@/components/ui';
+import { Button, Card, Field, Icon, Modal, TextInput, useConfirm } from '@/components/ui';
 import { TopBar } from '@/components/layout';
 import type { OrganisationResponse, PublicHolidayResponse } from '@/types';
 import { getOrganisation, updateBranding } from '@/services/organisationApi';
@@ -156,6 +156,7 @@ function PublicHolidaysSection() {
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState<number>(currentYear);
   const [showModal, setShowModal] = useState(false);
+  const confirm = useConfirm();
 
   const reload = async () => {
     setLoading(true);
@@ -175,7 +176,13 @@ function PublicHolidaysSection() {
   }, [year]);
 
   const remove = async (id: string) => {
-    if (!window.confirm('Remove this public holiday?')) return;
+    const ok = await confirm({
+      title: 'Remove this public holiday?',
+      body: 'Org users will be bookable again on this date.',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deletePublicHoliday(id);
