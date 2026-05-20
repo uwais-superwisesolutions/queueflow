@@ -30,7 +30,12 @@ export interface BookingResponse {
 }
 
 export interface CreateBookingPayload {
-  seatId: string;
+  /**
+   * Optional. Provide when the client entered via a seat-scoped portal link.
+   * When omitted, the backend resolves the seat from the chosen member's
+   * currently active seat assignment.
+   */
+  seatId?: string | null;
   orgMemberId: string;
   timeslotTypeId: string;
   scheduledStartAt: string; // ISO-8601

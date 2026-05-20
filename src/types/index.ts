@@ -10,6 +10,7 @@ export * from './slotTypes';
 export * from './bookingTypes';
 export * from './sessionTypes';
 export * from './portalLinkTypes';
+export * from './notificationTypes';
 
 export type Tone = 'neutral' | 'teal' | 'amber' | 'blue' | 'coral' | 'success';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost' | 'outline' | 'teal-tint';
@@ -52,14 +53,6 @@ export interface DailyStats {
 export interface AnalyticsDataPoint {
   date: string;
   bookings: number;
-}
-
-export interface Notification {
-  id: string;
-  type: 'approval' | 'checkin' | 'cancellation' | 'system';
-  message: string;
-  time: string;
-  read: boolean;
 }
 
 export interface Palette {

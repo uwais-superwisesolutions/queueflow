@@ -1,51 +1,26 @@
 // src/views/superuser/management.tsx
 // Holds the dashboard pages that don't yet have backend APIs:
-//   - ClientLinksView  (M7 — pending)
 //   - AnalyticsView    (M9+ — pending)
 //
 // API-backed pages live in their own files:
-//   - OrgUsersView   → ./org-users.tsx
-//   - SeatsView      → ./seats.tsx
-//   - TimeslotsView  → ./timeslot-types.tsx
-//   - SettingsView   → ./settings.tsx
+//   - OrgUsersView    → ./org-users.tsx
+//   - SeatsView       → ./seats.tsx
+//   - TimeslotsView   → ./timeslot-types.tsx
+//   - SettingsView    → ./settings.tsx
+//   - PortalLinksView → ./portal-links.tsx
 
-import { useState } from 'react';
 import {
   Button,
   Card,
-  Field,
   Kpi,
-  Modal,
-  Pill,
-  QRCode,
   SelectInput,
-  TextInput,
 } from '@/components/ui';
 import { TopBar } from '@/components/layout';
-import { cn } from '@/lib/utils';
-import { useCopy } from '@/hooks/use-copy';
 import { DataGrid, type DataGridColumn, type DataGridRow } from './shared';
 
 /* ─────────────────────────────────────────────────
-   Mock data (M7/M9 not implemented backend-side)
+   Mock data (M9+ analytics not implemented backend-side)
 ───────────────────────────────────────────────── */
-
-interface PortalLink {
-  id: number;
-  name: string;
-  url: string;
-  scope: string;
-  created: string;
-  scans: number;
-}
-
-const LINKS: PortalLink[] = [
-  { id: 1, name: 'Main entrance QR',         url: 'queueflow.io/q/bryanstonfp',             scope: 'Whole org',               created: '12 Feb 2026', scans: 1842 },
-  { id: 2, name: 'Reception desk handout',   url: 'queueflow.io/q/bryanstonfp?l=reception', scope: 'Whole org',               created: '14 Feb 2026', scans: 612 },
-  { id: 3, name: 'Dental waiting area',      url: 'queueflow.io/q/bryanstonfp/dental',      scope: 'Department · Dental',     created: '03 Mar 2026', scans: 287 },
-  { id: 4, name: 'Triage walk-in poster',    url: 'queueflow.io/q/bryanstonfp/triage',      scope: 'Seat · Triage desk',      created: '21 Apr 2026', scans: 96 },
-  { id: 5, name: 'Pediatrics referral card', url: 'queueflow.io/q/bryanstonfp/peds',        scope: 'Department · Pediatrics', created: '08 May 2026', scans: 11 },
-];
 
 const BOOKINGS_30D: number[] = [62, 71, 68, 84, 78, 92, 88, 74, 80, 96, 102, 89, 95, 100, 87, 84, 110, 105, 98, 112, 108, 99, 116, 121, 104, 95, 108, 102, 118, 87];
 
@@ -65,154 +40,6 @@ const SEAT_UTIL = [
   { name: 'Triage desk',         util: 73 },
   { name: 'Peds room',           util: 14 },
 ];
-
-/* ─────────────────────────────────────────────────
-   #14  ClientLinksView
-───────────────────────────────────────────────── */
-
-type LinkScope = 'Whole org' | 'Department' | 'Specific seat';
-
-interface ClientLinksViewProps {
-  onOpenClientPortal?: () => void;
-}
-
-export function ClientLinksView({ onOpenClientPortal }: ClientLinksViewProps = {}) {
-  const [showModal, setShowModal] = useState(false);
-  const [scope, setScope] = useState<LinkScope>('Whole org');
-  const scopeOptions: LinkScope[] = ['Whole org', 'Department', 'Specific seat'];
-
-  return (
-    <>
-      <TopBar
-        title="Client portal links"
-        subtitle="QR codes and shareable URLs for joining your queue."
-        right={
-          <Button variant="primary" icon="plus" onClick={() => setShowModal(true)}>
-            Generate new link
-          </Button>
-        }
-      />
-      <div className="flex-1 overflow-auto px-6 pt-4 pb-10 qf-scroll">
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-          {LINKS.map((l) => (
-            <LinkCard key={l.id} link={l} onOpenClientPortal={onOpenClientPortal} />
-          ))}
-        </div>
-      </div>
-
-      <Modal
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        title="Generate a new link"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setShowModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" icon="link" onClick={() => setShowModal(false)}>
-              Generate link
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-[14px]">
-          <Field label="Link name" hint="Where will you post this?">
-            <TextInput defaultValue="Side entrance QR" />
-          </Field>
-          <Field label="Scope">
-            <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-              {scopeOptions.map((o) => (
-                <button
-                  key={o}
-                  onClick={() => setScope(o)}
-                  className={cn(
-                    'px-3 py-[10px] rounded-[8px] cursor-pointer text-left text-[12.5px] font-medium',
-                    'border transition-[background,border-color,color] duration-100',
-                    scope === o
-                      ? 'bg-teal-tint border-teal text-teal-ink'
-                      : 'bg-surface border-line-2 text-ink hover:bg-surface-2',
-                  )}
-                >
-                  {o}
-                </button>
-              ))}
-            </div>
-          </Field>
-          {scope === 'Department' && (
-            <Field label="Department">
-              <SelectInput
-                defaultValue="General Practice"
-                options={['General Practice', 'Dental', 'Pediatrics']}
-              />
-            </Field>
-          )}
-          {scope === 'Specific seat' && (
-            <Field label="Seat">
-              <SelectInput
-                defaultValue="Triage desk"
-                options={['Triage desk', 'Consultation room 1', 'Dental chair A']}
-              />
-            </Field>
-          )}
-        </div>
-      </Modal>
-    </>
-  );
-}
-
-function LinkCard({
-  link,
-  onOpenClientPortal,
-}: {
-  link: PortalLink;
-  onOpenClientPortal?: () => void;
-}) {
-  const { copy, copied } = useCopy();
-  const fullUrl = link.url.startsWith('http') ? link.url : `https://${link.url}`;
-
-  return (
-    <Card hover style={{ padding: 14, overflow: 'hidden' }}>
-      <div className="flex items-start gap-3 min-w-0">
-        <QRCode size={72} value={fullUrl} />
-        <div className="flex-1 min-w-0">
-          <div className="text-[13.5px] font-medium truncate">{link.name}</div>
-          <div className="mono text-[11px] text-ink-3 mt-[2px] leading-[1.4] break-all">
-            {link.url}
-          </div>
-          <Pill tone="neutral" className="mt-2">
-            {link.scope}
-          </Pill>
-        </div>
-      </div>
-      <div className="mt-3 pt-3 border-t border-line">
-        <div className="flex items-center gap-[6px] min-w-0 mb-2">
-          <span className="tnum text-[13px] font-medium">{link.scans.toLocaleString()}</span>
-          <span className="text-[11.5px] text-ink-3">scans</span>
-          <span className="text-[11.5px] text-ink-4 truncate">· {link.created}</span>
-        </div>
-        <div className="flex items-center flex-wrap gap-[6px] justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={copied ? 'check' : 'copy'}
-            onClick={() => void copy(fullUrl)}
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-          <Button variant="ghost" size="sm" icon="download">QR</Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            iconRight="arrowR"
-            onClick={onOpenClientPortal}
-          >
-            Open
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 /* ─────────────────────────────────────────────────
    #15  AnalyticsView + chart primitives

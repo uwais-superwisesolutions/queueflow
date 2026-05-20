@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useRef, useState } from 'react';
 import { PhoneFrame } from '@/components/layout';
 import { Icon, Button, SkeletonBox, SkeletonLine } from '@/components/ui';
@@ -50,23 +49,16 @@ export function ClientConfirmationScreen({ slot, clientReason, onResolved, onPic
     createdRef.current = true;
 
     const scan = getCachedPortalScan();
-    // Backend requires a seatId. Today the slot search doesn't return one, so we
-    // can only resolve it from a seat-scoped portal-link scan. If the user came
-    // in through an org- or department-scoped link we surface a clear error.
-    const seatId = scan?.scope?.type === 'seat' && scan.scope.id ? scan.scope.id : null;
-
-    if (!seatId) {
-      setError(
-        'This portal link doesn\'t tell us which seat to book against. Ask reception to share a seat-scoped link.',
-      );
-      setCreating(false);
-      return;
-    }
+    // Pass seatId only when the client came in via a seat-scoped portal link.
+    // Otherwise the backend resolves the seat from the chosen member's active
+    // seat assignment.
+    const seatId =
+      scan?.scope?.type === 'seat' && scan.scope.id ? scan.scope.id : null;
 
     (async () => {
       try {
         const resp = await createClientBooking({
-          seatId,
+          seatId: seatId ?? undefined,
           orgMemberId: slot.orgMemberId,
           timeslotTypeId: slot.timeslotTypeId,
           scheduledStartAt: slot.startAt,

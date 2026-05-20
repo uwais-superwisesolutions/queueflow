@@ -26,3 +26,15 @@ export interface ClientProfileResponse {
   createdAt: string;
   lastSeenAt: string;
 }
+
+export interface UpdateClientProfilePayload {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}
+
+export interface ClientConsultantResponse {
+  orgMemberId: string;
+  fullName: string;
+  avatarUrl: string | null;
+}

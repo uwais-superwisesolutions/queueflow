@@ -2,11 +2,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/sidebar'
-import { Card, Icon, Button, Pill } from '@/components/ui'
+import { Card, Icon, Button, Pill, Field, TextInput } from '@/components/ui'
 import { TopBar } from '@/components/layout'
 import { listMyTimeslotTypes, listTimeslotTypes, optInTimeslotType, optOutTimeslotType } from '@/services/timeslotTypeApi'
+import { listNotifications } from '@/services/notificationApi'
+import { updateMyProfile } from '@/services/meApi'
 import { getApiErrorMessage } from '@/lib/api-error'
-import type { TimeslotTypeResponse } from '@/types'
+import { agoLabel } from '@/lib/time'
+import { POLL_INTERVAL_MS } from '@/lib/realtime-channels'
+import { usePolling } from '@/hooks/use-polling'
+import type { NotificationResponse, NotificationType, TimeslotTypeResponse } from '@/types'
 import { useAuthStore } from '@/stores/authStore'
 import { OrgUserQueueScreen } from './live-queue'
 import { AvailabilityView } from './availability'
@@ -21,7 +26,7 @@ interface OrgUserDashboardProps {
 const ORG_NAV: SidebarNavItem[] = [
   { id: 'queue', label: 'Queue', icon: 'users' },
   { id: 'availability', label: 'My availability', icon: 'calendar' },
-  { id: 'timeconfig', label: 'Time configurations', icon: 'clock' },
+  { id: 'timeconfig', label: 'Enable Services', icon: 'clock' },
   { id: 'notifications', label: 'Notifications', icon: 'bell' },
   { heading: 'Account' },
   { id: 'profile', label: 'Profile', icon: 'user' },
@@ -109,9 +114,9 @@ function TimeConfigView() {
   return (
     <>
       <TopBar
-        title="Time configurations"
+        title="Enable Services"
         subtitle="Choose which services you accept for your seat."
-        breadcrumb={['Dashboard', 'Time configurations']}
+        breadcrumb={['Dashboard', 'Enable Services']}
       />
       <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
         <Card padding={0} className="max-w-[720px]">
@@ -172,59 +177,150 @@ function TimeConfigView() {
 }
 
 function NotificationsView() {
-  const items: { tone: 'coral' | 'amber' | 'blue'; title: string; body: string; time: string }[] = [
-    {
-      tone: 'coral',
-      title: 'Running 12 min behind schedule',
-      body: 'Delay alert sent to 3 clients in your queue.',
-      time: '2m ago',
-    },
-    {
-      tone: 'amber',
-      title: 'New request from Beth Cele',
-      body: 'Requested 15:00 · Consult.',
-      time: '5m ago',
-    },
-    {
-      tone: 'blue',
-      title: 'Sarah Mokoena checked in',
-      body: 'Arrived in waiting room.',
-      time: '14m ago',
-    },
-  ]
+  const [items, setItems] = useState<NotificationResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async () => {
+    try {
+      const res = await listNotifications({ limit: 50 })
+      setItems(res.data)
+      setError(null)
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not load notifications.'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  usePolling(load, POLL_INTERVAL_MS.notifications)
 
   return (
     <>
       <TopBar title="Notifications" />
       <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
         <Card padding={0} className="max-w-[720px]">
-          {items.map((n, i) => (
-            <div
-              key={n.title}
-              className={
-                i < items.length - 1
-                  ? 'px-4 py-3 border-b border-line flex gap-2.5'
-                  : 'px-4 py-3 flex gap-2.5'
-              }
-            >
-              <FeedKindBadge tone={n.tone} />
-              <div className="flex-1 min-w-0">
-                <div className="text-[12.5px] font-medium">{n.title}</div>
-                <div className="text-[11.5px] text-ink-3 mt-0.5">{n.body}</div>
-                <div className="text-[11px] text-ink-4 mt-1">{n.time}</div>
-              </div>
+          {error && (
+            <div className="px-4 py-3 text-[12.5px] text-coral border-b border-line" role="alert">
+              <Icon name="alert" size={12} /> {error}
             </div>
-          ))}
+          )}
+          {loading && items.length === 0 ? (
+            <div className="px-4 py-4 text-[12.5px] text-ink-3">Loading notifications…</div>
+          ) : items.length === 0 ? (
+            <div className="px-4 py-5 text-[12.5px] text-ink-3 text-center">
+              No notifications yet. They'll appear here as bookings move through your queue.
+            </div>
+          ) : (
+            items.map((n, i) => (
+              <NotificationRow key={n.id} notification={n} divider={i < items.length - 1} />
+            ))
+          )}
         </Card>
       </div>
     </>
   )
 }
 
+function NotificationRow({
+  notification,
+  divider,
+}: {
+  notification: NotificationResponse
+  divider: boolean
+}) {
+  const { tone, title } = describeNotification(notification.notificationType)
+  const ms = Date.now() - new Date(notification.createdAt).getTime()
+  const showStatusPill =
+    notification.status === 'failed' || notification.status === 'pending'
+
+  return (
+    <div
+      className={
+        divider
+          ? 'px-4 py-3 border-b border-line flex gap-2.5'
+          : 'px-4 py-3 flex gap-2.5'
+      }
+    >
+      <FeedKindBadge tone={tone} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <div className="text-[12.5px] font-medium truncate">{title}</div>
+          {showStatusPill && (
+            <Pill tone={notification.status === 'failed' ? 'coral' : 'amber'}>
+              {notification.status}
+            </Pill>
+          )}
+        </div>
+        <div className="text-[11.5px] text-ink-3 mt-0.5">{notification.body}</div>
+        <div className="text-[11px] text-ink-4 mt-1">{agoLabel(ms)}</div>
+      </div>
+    </div>
+  )
+}
+
+function describeNotification(type: NotificationType): {
+  tone: 'coral' | 'amber' | 'blue'
+  title: string
+} {
+  switch (type) {
+    case 'approved':
+      return { tone: 'blue', title: 'Booking approved' }
+    case 'rejected':
+      return { tone: 'coral', title: 'Booking rejected' }
+    case 'call_next':
+      return { tone: 'amber', title: 'Client called next' }
+    case 'delay_basic':
+      return { tone: 'coral', title: 'Delay alert sent' }
+    default:
+      return { tone: 'blue', title: 'Notification' }
+  }
+}
+
 function ProfileView() {
-  const fullName = useAuthStore((s) => s.fullName) ?? 'Org user'
-  const email = useAuthStore((s) => s.email) ?? 'unknown@queueflow.app'
+  const storedFullName = useAuthStore((s) => s.fullName)
+  const storedEmail = useAuthStore((s) => s.email)
   const role = useAuthStore((s) => s.role) ?? 'org_user'
+  const setProfile = useAuthStore((s) => s.setProfile)
+
+  const [fullName, setFullName] = useState(storedFullName ?? '')
+  const [email, setEmail] = useState(storedEmail ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+
+  const dirty =
+    fullName.trim() !== (storedFullName ?? '').trim() ||
+    email.trim() !== (storedEmail ?? '').trim()
+
+  const handleSave = async () => {
+    setError(null)
+    if (!fullName.trim()) {
+      setError('Full name is required.')
+      return
+    }
+    if (!email.trim() || !email.includes('@')) {
+      setError('Email is not valid.')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await updateMyProfile({
+        fullName: fullName.trim(),
+        email: email.trim(),
+      })
+      setProfile({ fullName: res.data.fullName, email: res.data.email })
+      setSavedAt(Date.now())
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not update profile.'))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <>
@@ -236,13 +332,45 @@ function ProfileView() {
               <Icon name="user" size={16} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[14px] font-medium truncate">{fullName}</div>
-              <div className="text-[12px] text-ink-3 truncate">{email}</div>
+              <div className="text-[14px] font-medium truncate">{storedFullName ?? 'Org user'}</div>
+              <div className="text-[12px] text-ink-3 truncate">{storedEmail ?? '—'}</div>
             </div>
             <Pill tone="neutral">{role === 'super_user' ? 'Super user' : 'Org user'}</Pill>
           </div>
-          <div className="px-4 py-4 text-[12.5px] text-ink-3">
-            Profile details are managed by your organisation admin.
+          <div className="px-4 py-4 flex flex-col gap-3">
+            <Field label="Full name">
+              <TextInput
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Your name"
+              />
+            </Field>
+            <Field label="Email">
+              <TextInput
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                type="email"
+              />
+            </Field>
+            {error && (
+              <div className="text-[12.5px] text-coral" role="alert">
+                <Icon name="alert" size={12} /> {error}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={saving || !dirty}
+                icon={saving ? undefined : 'check'}
+              >
+                {saving ? 'Saving…' : 'Save changes'}
+              </Button>
+              {savedAt && !dirty && !saving && (
+                <span className="text-[12px] text-ink-3">Saved.</span>
+              )}
+            </div>
           </div>
         </Card>
       </div>

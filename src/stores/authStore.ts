@@ -22,6 +22,8 @@ interface AuthState extends AuthProfile {
   setTokens: (accessToken: string, refreshToken: string) => void;
   setOnboardingComplete: (value: boolean) => void;
   setOrganisationName: (name: string) => void;
+  /** Patch profile fields after PATCH /secure/me/profile. */
+  setProfile: (patch: Partial<Pick<AuthProfile, 'fullName' | 'email'>>) => void;
   clear: () => void;
   isAuthenticated: () => boolean;
 }
@@ -116,6 +118,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       };
       persistProfile(next);
       return { organisationName: name };
+    });
+  },
+
+  setProfile: (patch) => {
+    set((state) => {
+      const next: AuthProfile = {
+        userId: state.userId,
+        email: patch.email !== undefined ? patch.email : state.email,
+        fullName: patch.fullName !== undefined ? patch.fullName : state.fullName,
+        organisationId: state.organisationId,
+        organisationName: state.organisationName,
+        orgMemberId: state.orgMemberId,
+        role: state.role,
+        onboardingComplete: state.onboardingComplete,
+      };
+      persistProfile(next);
+      return { email: next.email, fullName: next.fullName };
     });
   },
 

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { PhoneFrame } from '@/components/layout';
 import { Icon, Button, Field, TextInput } from '@/components/ui';
+import { updateClientMe } from '@/services/clientApi';
+import { getApiErrorMessage } from '@/lib/api-error';
 
 export interface NewDetailsResult {
   /** Trimmed reason for visit, or null when empty. Forwarded to the booking-create payload. */
@@ -12,15 +14,49 @@ interface ClientNewDetailsScreenProps {
   onBack: () => void;
 }
 
-// First name / last name / email / SMS consent are captured visually but not
-// persisted yet — the backend has no client-profile-update endpoint as of
-// Phase 1. Reason-for-visit *is* persisted via CreateBookingRequest.clientReason.
+// First name / last name / email are persisted via PATCH /api/client/me on
+// Continue. SMS consent is cosmetic — there's no backend column for it yet.
+// Reason-for-visit is persisted via CreateBookingRequest.clientReason on the
+// next screen.
 export function ClientNewDetailsScreen({ onContinue, onBack }: ClientNewDetailsScreenProps) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
   const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleContinue = () => {
-    const trimmed = reason.trim();
-    onContinue({ clientReason: trimmed.length > 0 ? trimmed : null });
+  const handleContinue = async () => {
+    setError(null);
+
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+    const trimmedEmail = email.trim();
+    const trimmedReason = reason.trim();
+
+    if (trimmedEmail.length > 0 && !trimmedEmail.includes('@')) {
+      setError('Email is not valid.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Only PATCH when the user actually filled something in. New clients
+      // arrive with empty fields, so an all-empty submit shouldn't fire a
+      // request.
+      if (trimmedFirst || trimmedLast || trimmedEmail) {
+        await updateClientMe({
+          firstName: trimmedFirst || null,
+          lastName: trimmedLast || null,
+          email: trimmedEmail || null,
+        });
+      }
+      onContinue({ clientReason: trimmedReason.length > 0 ? trimmedReason : null });
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not save your details.'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -41,27 +77,32 @@ export function ClientNewDetailsScreen({ onContinue, onBack }: ClientNewDetailsS
         </p>
 
         <div className="flex flex-col gap-3.5">
-          {/* Name row — cosmetic until a client-profile endpoint exists. */}
           <div className="grid grid-cols-2 gap-2.5">
             <Field label="First name">
               <TextInput
-                defaultValue="Sarah"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="First name"
                 wrapClassName="h-[46px]"
               />
             </Field>
             <Field label="Last name">
               <TextInput
-                defaultValue="Mokoena"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Last name"
                 wrapClassName="h-[46px]"
               />
             </Field>
           </div>
 
-          {/* Email — cosmetic until a client-profile endpoint exists. */}
           <Field label="Email" hint="Optional — for receipts and reminders.">
             <TextInput
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="sarah@example.com"
               icon="send"
+              type="email"
               wrapClassName="h-[46px]"
             />
           </Field>
@@ -76,11 +117,18 @@ export function ClientNewDetailsScreen({ onContinue, onBack }: ClientNewDetailsS
             />
           </Field>
 
-          {/* SMS consent — cosmetic until a client-profile endpoint exists. */}
+          {/* SMS consent — cosmetic. No backend column yet; a schema migration
+              would be needed before this can be persisted. */}
           <label className="flex items-start gap-2.5 px-3 py-2.5 bg-surface-2 border border-line rounded-[10px] text-[12.5px] text-ink-2 leading-relaxed cursor-pointer">
             <input type="checkbox" defaultChecked className="mt-0.5" />
             <span>I agree to receive SMS updates about my appointments at this number.</span>
           </label>
+
+          {error && (
+            <div className="text-[12.5px] text-coral" role="alert">
+              <Icon name="alert" size={12} /> {error}
+            </div>
+          )}
         </div>
 
         <Button
@@ -90,8 +138,9 @@ export function ClientNewDetailsScreen({ onContinue, onBack }: ClientNewDetailsS
           className="mt-[18px] h-[52px]"
           onClick={handleContinue}
           iconRight="arrowR"
+          disabled={saving}
         >
-          Continue
+          {saving ? 'Saving…' : 'Continue'}
         </Button>
       </div>
     </PhoneFrame>

@@ -34,3 +34,11 @@ export function refreshSession(payload: RefreshTokenPayload) {
     data: payload,
   });
 }
+
+export function updatePassword(payload: { password: string }) {
+  return api.request<{ message: string }>({
+    url: '/secure/auth/update-password',
+    method: 'POST',
+    data: payload,
+  });
+}
