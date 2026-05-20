@@ -36,4 +36,6 @@ export const POLL_INTERVAL_MS = {
   bookingStatus: 8_000,
   /** Seat heartbeat — backend's stale checker fires after 5 min of silence. */
   heartbeat: 30_000,
+  /** NotificationDispatcher flushes every 30s — polling slower than that is fine. */
+  notifications: 30_000,
 } as const;

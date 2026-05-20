@@ -51,3 +51,17 @@ export interface InvitationResponse {
   createdAt: string;
   expiresAt: string;
 }
+
+export interface UpdateMyProfilePayload {
+  fullName?: string;
+  email?: string;
+  avatarUrl?: string | null;
+}
+
+export interface MyProfileResponse {
+  orgMemberId: string;
+  fullName: string;
+  email: string;
+  avatarUrl: string | null;
+  role: MemberRole;
+}
