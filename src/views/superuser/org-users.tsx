@@ -6,6 +6,7 @@ import type { InvitationResponse, MemberResponse, MemberRole, SeatResponse } fro
 import { getInvitations, getMembers, inviteUser } from '@/services/organisationApi';
 import { listSeats } from '@/services/seatApi';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { fmtDate } from '@/lib/date';
 import {
   DataGrid,
   EmptyState,
@@ -42,7 +43,7 @@ function relativeTime(iso: string): string {
   if (hours < 24) return `${hours} h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} d ago`;
-  return new Date(iso).toLocaleDateString();
+  return fmtDate(iso);
 }
 
 export function OrgUsersView() {

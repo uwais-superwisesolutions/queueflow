@@ -45,6 +45,7 @@ import type {
   SeatResponse,
   TimeslotTypeResponse,
 } from '@/types';
+import { fmtTime, minutesSince } from '@/lib/date';
 
 interface OrgUserQueueScreenProps {
   /** Called when "End shift" succeeds — route wrapper sends user to /claim. */
@@ -65,13 +66,6 @@ function clientLabel(b: BookingResponse): string {
   return 'Client';
 }
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-
-function minutesBetween(a: string, b: number): number {
-  return Math.max(0, Math.floor((b - new Date(a).getTime()) / 60_000));
-}
 
 export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScreenProps) {
   const fullName = useAuthStore((s) => s.fullName);
@@ -296,7 +290,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
         </div>
         <span className="flex items-center gap-1.5 text-[12px] text-ink-3 flex-none">
           <span className="qf-live-dot" />
-          {updatedAt ? `Updated ${minutesBetween(new Date(updatedAt).toISOString(), Date.now())}m ago` : 'Live'}
+          {updatedAt ? `Updated ${minutesSince(new Date(updatedAt).toISOString())}m ago` : 'Live'}
         </span>
         <Button
           variant="secondary"
@@ -595,7 +589,7 @@ function PendingCard({
             <>
               <span className="text-ink-4">·</span>
               <span className="mono">
-                hold {formatHMS(holdRemaining).slice(3)}
+                hold {formatHMS(Math.floor(holdRemaining / 1000)).slice(3)}
               </span>
             </>
           )}
@@ -655,7 +649,7 @@ function InServiceCard({
           className="mono tnum text-[26px] font-medium"
           style={{ letterSpacing: '-0.01em' }}
         >
-          {formatHMS(elapsed)}
+          {formatHMS(Math.floor(elapsed / 1000))}
         </div>
         <div className="text-[10.5px] text-ink-3 uppercase" style={{ letterSpacing: '0.06em' }}>
           Elapsed

@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Icon, Button, Card, Pill, Avatar, Kpi, SkeletonBox, SkeletonLine } from '@/components/ui';
 import { ProfileMenu, Sidebar, TopBar } from '@/components/layout';
 import { agoLabel } from '@/lib/time';
+import { fmtTime, todayInTz } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { usePolling } from '@/hooks/use-polling';
 import { POLL_INTERVAL_MS } from '@/lib/realtime-channels';
@@ -394,9 +395,6 @@ const STATUS_LABEL: Record<BookingStatus, string> = {
   expired: 'Expired',
 };
 
-function fmtBookingTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
 
 interface QueueGroupCardProps {
   memberName: string;
@@ -425,7 +423,7 @@ function QueueGroupCard({ memberName, bookings, seatNameById }: QueueGroupCardPr
           >
             <div className="flex-1 min-w-0">
               <div className="text-[12.5px] text-ink-2 leading-[1.45] truncate">
-                {fmtBookingTime(b.scheduledStartAt)}
+                {fmtTime(b.scheduledStartAt)}
                 {b.seatId && (
                   <span className="text-ink-3"> · {seatNameById.get(b.seatId) ?? 'seat'}</span>
                 )}
@@ -554,14 +552,9 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
 
   const bookingsToday = useMemo(() => {
     if (!queue) return 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    const isToday = (b: BookingResponse) => {
-      const d = new Date(b.scheduledStartAt).getTime();
-      return d >= today.getTime() && d < tomorrow.getTime();
-    };
+    const todayStr = todayInTz();
+    const isToday = (b: BookingResponse) =>
+      new Date(b.scheduledStartAt).toLocaleDateString('en-CA') === todayStr;
     return (
       queue.pendingApproval.filter(isToday).length +
       queue.scheduled.filter(isToday).length +

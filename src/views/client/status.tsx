@@ -7,6 +7,7 @@ import { usePolling } from '@/hooks/use-polling';
 import { POLL_INTERVAL_MS } from '@/lib/realtime-channels';
 import { formatHMS } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { fmtTime, fmtDate } from '@/lib/date';
 import { getApiErrorMessage } from '@/lib/api-error';
 import {
   cancelMyClientBooking,
@@ -28,19 +29,6 @@ const ACTIVE_STATUSES = new Set<BookingStatus>([
   'in_service',
 ]);
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-
-function fmtDay(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
 
 export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: ClientStatusScreenProps) {
   const [booking, setBooking] = useState<BookingResponse | null>(null);
@@ -233,7 +221,7 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
               ? 'You\'re being seen now.'
               : booking.status === 'checked_in'
                 ? 'You\'re checked in — they\'ll call you soon.'
-                : `Scheduled for ${fmtDay(booking.scheduledStartAt)} at ${fmtTime(booking.scheduledStartAt)}`}
+                : `Scheduled for ${fmtDate(booking.scheduledStartAt)} at ${fmtTime(booking.scheduledStartAt)}`}
           </div>
         </div>
 
@@ -262,7 +250,7 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
 
         <div className="px-4 pb-4">
           <Card padding={0}>
-            <DetailRow icon="calendar" label="When" value={`${fmtDay(booking.scheduledStartAt)}, ${fmtTime(booking.scheduledStartAt)}`} />
+            <DetailRow icon="calendar" label="When" value={`${fmtDate(booking.scheduledStartAt)}, ${fmtTime(booking.scheduledStartAt)}`} />
             <DetailRow icon="clock" label="Length" value={`${Math.round((new Date(booking.scheduledEndAt).getTime() - new Date(booking.scheduledStartAt).getTime()) / 60000)} min`} last />
           </Card>
         </div>
@@ -284,7 +272,7 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
                   <Icon name="calendar" size={13} className="text-ink-3" />
                   <div className="flex-1">
                     <div className="text-[12.5px] font-medium">
-                      {fmtDay(b.scheduledStartAt)}, {fmtTime(b.scheduledStartAt)}
+                      {fmtDate(b.scheduledStartAt)}, {fmtTime(b.scheduledStartAt)}
                     </div>
                     <div className="text-[11px] text-ink-3 capitalize">
                       {b.status.replace('_', ' ')}
