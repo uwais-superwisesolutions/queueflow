@@ -56,7 +56,7 @@ export function TextInput({ icon, error, wrapClassName, className, ...rest }: Te
 }
 
 interface SelectInputProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  options: (string | { value: string; label: string })[];
+  options: (string | { value: string; label: string; disabled?: boolean })[];
   wrapClassName?: string;
 }
 
@@ -79,7 +79,7 @@ export function SelectInput({ options, wrapClassName, className, ...rest }: Sele
         {options.map(o =>
           typeof o === 'string'
             ? <option key={o} value={o}>{o}</option>
-            : <option key={o.value} value={o.value}>{o.label}</option>
+            : <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
         )}
       </select>
       <Icon
