@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/sidebar'
@@ -171,7 +172,7 @@ function TimeConfigView() {
 }
 
 function NotificationsView() {
-  const items = [
+  const items: { tone: 'coral' | 'amber' | 'blue'; title: string; body: string; time: string }[] = [
     {
       tone: 'coral',
       title: 'Running 12 min behind schedule',

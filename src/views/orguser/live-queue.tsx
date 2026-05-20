@@ -800,7 +800,7 @@ function QueueSkeleton() {
 }
 
 function NotificationPanel() {
-  const items = [
+  const items: { tone: 'coral' | 'amber' | 'blue'; title: string; body: string; time: string }[] = [
     {
       tone: 'coral',
       title: 'Running 12 min behind schedule',

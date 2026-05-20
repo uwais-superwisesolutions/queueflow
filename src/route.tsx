@@ -20,8 +20,6 @@ const SuperUserDashboard = lazy(() => import('@/views/superuser/dashboard').then
 
 // OrgUser
 const OrgUserClaimScreen = lazy(() => import('@/views/orguser/seat-claim').then(m => ({ default: m.OrgUserClaimScreen })))
-const OrgUserQueueScreen = lazy(() => import('@/views/orguser/live-queue').then(m => ({ default: m.OrgUserQueueScreen })))
-const AvailabilityView   = lazy(() => import('@/views/orguser/availability').then(m => ({ default: m.AvailabilityView })))
 const OrgUserDashboard   = lazy(() => import('@/views/orguser/dashboard').then(m => ({ default: m.OrgUserDashboard })))
 
 // Client
@@ -94,15 +92,6 @@ function OrgUserClaimRoute() {
   return (
     <OrgUserClaimScreen
       onClaim={() => navigate('/queue')}
-      onSignOut={() => navigate('/login', { replace: true })}
-    />
-  )
-}
-function OrgUserQueueRoute() {
-  const navigate = useNavigate()
-  return (
-    <OrgUserQueueScreen
-      onShiftEnded={() => navigate('/claim', { replace: true })}
       onSignOut={() => navigate('/login', { replace: true })}
     />
   )

@@ -30,7 +30,6 @@ import {
   listMyAvailabilityExceptions,
   replaceMyAvailabilityPatterns,
 } from '@/services/availabilityApi';
-import { listTimeslotTypes } from '@/services/timeslotTypeApi';
 import { getApiErrorMessage } from '@/lib/api-error';
 
 // API uses 0 = Sunday, but the UI shows Monday-first.
@@ -250,7 +249,6 @@ function RecurringSchedule() {
               rows={rows}
               editingDay={editingDay}
               onSelectDay={(d) => setEditingDay(d)}
-              onAddDay={(d) => addWindow(d)}
               onEditWindow={(uid, day) => {
                 setEditingDay(day);
                 setEditingWindowId(uid);
@@ -296,13 +294,11 @@ function WeekGrid({
   rows,
   editingDay,
   onSelectDay,
-  onAddDay,
   onEditWindow,
 }: {
   rows: PatternRow[];
   editingDay: number | null;
   onSelectDay: (dayOfWeek: number) => void;
-  onAddDay: (dayOfWeek: number) => void;
   onEditWindow: (uid: string, dayOfWeek: number) => void;
 }) {
   const slots = useMemo(() => {
@@ -364,7 +360,7 @@ function WeekGrid({
           ))}
         </div>
 
-        {UI_DAY_ORDER.map((d, dayIdx) => {
+        {UI_DAY_ORDER.map((d) => {
           const windows = dayRows.get(d) ?? [];
           const isWithin = (slotIdx: number) => {
             const minute = 8 * 60 + slotIdx * 30;
@@ -423,95 +419,6 @@ function WeekGrid({
   );
 }
 
-function DayEditorPanel({
-  dayOfWeek,
-  rows,
-  onAdd,
-  onRemove,
-  onChange,
-}: {
-  dayOfWeek: number | null;
-  rows: PatternRow[];
-  onAdd: () => void;
-  onRemove: (uid: string) => void;
-  onChange: (uid: string, key: 'startTime' | 'endTime', uiValue: string) => void;
-}) {
-  if (dayOfWeek == null) return null;
-  const label = DAY_NAMES[UI_DAY_ORDER.indexOf(dayOfWeek)];
-  const dayRows = rows.filter((r) => r.dayOfWeek === dayOfWeek);
-
-  return (
-    <Card padding={0}>
-      <div className="px-4 py-3 border-b border-line flex items-center gap-2">
-        <Icon name="calendar" size={14} className="text-ink-3" />
-        <span className="text-[13px] font-medium">{label}</span>
-        <span className="ml-auto text-[11.5px] text-ink-3">{dayRows.length} window{dayRows.length === 1 ? '' : 's'}</span>
-      </div>
-      <div className="p-3 flex flex-col gap-2">
-        {dayRows.length === 0 ? (
-          <div className="text-[12.5px] text-ink-3">No working windows yet.</div>
-        ) : (
-          dayRows.map((r) => (
-            <div key={r.uid} className="flex items-center gap-2">
-              <input
-                type="time"
-                value={toUiTime(r.startTime)}
-                onChange={(e) => onChange(r.uid, 'startTime', e.target.value)}
-                className="bg-surface border border-line-2 rounded-[8px] px-2.5 h-[36px] text-[13px] outline-none"
-              />
-              <span className="text-[12px] text-ink-3">to</span>
-              <input
-                type="time"
-                value={toUiTime(r.endTime)}
-                onChange={(e) => onChange(r.uid, 'endTime', e.target.value)}
-                className="bg-surface border border-line-2 rounded-[8px] px-2.5 h-[36px] text-[13px] outline-none"
-              />
-              <button
-                aria-label="Remove window"
-                onClick={() => onRemove(r.uid)}
-                className="border-0 bg-transparent cursor-pointer text-ink-3 p-1.5 rounded-[6px] hover:bg-surface-2 ml-1"
-              >
-                <Icon name="trash" size={13} />
-              </button>
-            </div>
-          ))
-        )}
-        <Button variant="secondary" size="sm" icon="plus" onClick={onAdd}>
-          Add window
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-function WeekSummaryCard() {
-  return (
-    <Card padding={14}>
-      <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold">
-        Week summary
-      </div>
-      <div className="grid gap-3 mt-2.5" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <div>
-          <div className="text-[11.5px] text-ink-3">Total windows</div>
-          <div className="tnum text-[20px] font-medium">14</div>
-        </div>
-        <div>
-          <div className="text-[11.5px] text-ink-3">Exceptions</div>
-          <div className="tnum text-[20px] font-medium">2</div>
-        </div>
-        <div>
-          <div className="text-[11.5px] text-ink-3">Bookings</div>
-          <div className="tnum text-[20px] font-medium">18</div>
-        </div>
-        <div>
-          <div className="text-[11.5px] text-ink-3">Conflicts</div>
-          <div className="tnum text-[20px] font-medium text-coral-2">3</div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 function AddWindowModal({
   open,
   defaultDay,
@@ -546,13 +453,6 @@ function AddWindowModal({
     [rows, day],
   );
 
-  const isFreeRange = (start: number, end: number) =>
-    !dayRows.some((r) => {
-      const rs = toMinutes(r.startTime);
-      const re = toMinutes(r.endTime);
-      return start < re && end > rs;
-    });
-
   const startOptions = useMemo(() =>
     times.map((t) => ({ value: t, label: toMeridiem(t) })),
     [times],
@@ -566,10 +466,8 @@ function AddWindowModal({
   useEffect(() => {
     if (open) {
       setDay(String(defaultDay));
-      const firstStart = startOptions.find((o) => !o.disabled)?.value ?? '09:00';
-      const firstEnd = endOptions.find((o) => !o.disabled)?.value ?? '17:00';
-      setStartTime(firstStart);
-      setEndTime(firstEnd);
+      setStartTime(startOptions[0]?.value ?? '09:00');
+      setEndTime(endOptions[0]?.value ?? '17:00');
       setError(null);
     }
   }, [open, defaultDay, startOptions, endOptions]);
