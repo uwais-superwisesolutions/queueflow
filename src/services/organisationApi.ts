@@ -68,3 +68,10 @@ export function getInvitations() {
     method: 'GET',
   });
 }
+
+export function deleteMember(orgMemberId: string) {
+  return api.request<{ message: string }>({
+    url: `/secure/organisations/members/${orgMemberId}`,
+    method: 'DELETE',
+  });
+}
