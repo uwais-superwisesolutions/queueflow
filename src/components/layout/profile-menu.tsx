@@ -17,6 +17,12 @@ interface ProfileMenuProps {
   email?: string | null;
   /** Action items shown in the dropdown. */
   items: ProfileMenuItem[];
+  /**
+   * Direction the dropdown opens. Default `'up'` suits sidebar-footer usage;
+   * pass `'down'` when the trigger sits at the top of the page so the menu
+   * doesn't clip above the viewport.
+   */
+  direction?: 'up' | 'down';
 }
 
 function roleLine(role: MemberRole | null): string {
@@ -25,7 +31,7 @@ function roleLine(role: MemberRole | null): string {
   return 'Guest';
 }
 
-export function ProfileMenu({ fullName, role, email, items }: ProfileMenuProps) {
+export function ProfileMenu({ fullName, role, email, items, direction = 'up' }: ProfileMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -67,7 +73,10 @@ export function ProfileMenu({ fullName, role, email, items }: ProfileMenuProps) 
         <div
           role="menu"
           className={cn(
-            'absolute bottom-[calc(100%+6px)] left-0 right-0',
+            'absolute left-0 right-0',
+            direction === 'up'
+              ? 'bottom-[calc(100%+6px)]'
+              : 'top-[calc(100%+6px)]',
             'bg-surface border border-line rounded-[10px] shadow-lg overflow-hidden z-50',
           )}
         >

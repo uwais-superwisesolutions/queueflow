@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { Icon, Button, Card, Divider, Pill, TextInput, SelectInput, QRCode } from '@/components/ui';
-import { useCopy } from '@/hooks/use-copy';
+import { Icon, Button, Card, Pill, TextInput, SelectInput } from '@/components/ui';
 import { QFLogo } from '@/components/layout';
 import { cn } from '@/lib/utils';
 import type {
   DepartmentResponse,
-  IconName,
   InvitationResponse,
   SeatResponse,
-  TimeslotTypeResponse,
 } from '@/types';
 import {
   completeOnboarding,
@@ -46,7 +43,6 @@ const WIZ_STEPS: WizStep[] = [
   { id: 1, label: 'Seats',          key: 'seats' },
   { id: 2, label: 'Team',           key: 'team' },
   { id: 3, label: 'Timeslot types', key: 'timeslots' },
-  { id: 4, label: 'Share your link',key: 'share' },
 ];
 
 function stepIndexFromKey(key: string | null | undefined): number {
@@ -157,6 +153,21 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
 
   const handleFinish = async () => {
     setError(null);
+    // Persist the current step's pending edits (timeslot types) before flipping
+    // the org to "onboarding complete". Mirrors the save-then-advance contract
+    // used by the Continue button.
+    if (saveRef.current) {
+      setSaving(true);
+      try {
+        const ok = await saveRef.current();
+        if (!ok) {
+          setSaving(false);
+          return;
+        }
+      } finally {
+        setSaving(false);
+      }
+    }
     setFinishing(true);
     try {
       await completeOnboarding();
@@ -176,7 +187,6 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
     'Add the seats in each department.',
     'Invite your team.',
     'Configure the services you offer.',
-    'Share your queue with clients.',
   ];
 
   const descriptions = [
@@ -184,7 +194,6 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
     'A seat is a room, chair, or workstation that a staff member can claim for a shift. The queue routes new requests to whoever is claiming that seat.',
     "We'll send each person an email with a link to set their password. You can skip this and add people later.",
     "These are the services clients can book. Each has a duration and color so they're easy to scan in the live queue.",
-    'Print the QR or copy the link. Anyone who scans this can join your queue and pick a time.',
   ];
 
   // Reset save handle whenever step changes so a stale step's saver doesn't run.
@@ -219,7 +228,6 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
           {step === 1 && <SeatsStep saveRef={saveRef} onError={setError} />}
           {step === 2 && <InvitesStep saveRef={saveRef} onError={setError} />}
           {step === 3 && <TimeslotsStep saveRef={saveRef} onError={setError} />}
-          {step === 4 && <ShareStep orgName={orgDisplayName} />}
         </div>
       </main>
 
@@ -991,113 +999,3 @@ function emptyTimeslotRow(): TimeslotRow {
   return { id: nextLocalId(), name: '', durationMinutes: 30, color: 'teal' };
 }
 
-// ---------------------------------------------------------------------------
-// Share step
-// ---------------------------------------------------------------------------
-
-interface ShareStepProps {
-  orgName: string;
-}
-
-function slugify(name: string): string {
-  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-function ShareStep({ orgName }: ShareStepProps) {
-  const { copy, copied } = useCopy();
-  const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
-  const [seats, setSeats] = useState<SeatResponse[]>([]);
-  const [timeslots, setTimeslots] = useState<TimeslotTypeResponse[]>([]);
-  const [invitesCount, setInvitesCount] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [deps, sts, tts, invs] = await Promise.all([
-          listDepartments(),
-          listSeats(),
-          listTimeslotTypes(),
-          import('@/services/organisationApi').then((m) => m.getInvitations()),
-        ]);
-        if (cancelled) return;
-        setDepartments(deps.data);
-        setSeats(sts.data);
-        setTimeslots(tts.data);
-        setInvitesCount(invs.data.length);
-      } catch {
-        // Share screen is decorative; failing silently is OK.
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const deptNames = departments.map((d) => d.name).filter(Boolean).join(', ');
-  const slug = slugify(orgName) || 'your-organisation';
-  const portalUrl = `https://queueflow.io/q/${slug}`;
-  const handleCopy = () => void copy(portalUrl);
-
-  const summaryItems: [string, string, IconName][] = [
-    ['1 organisation', orgName, 'building'],
-    [
-      `${departments.length} department${departments.length !== 1 ? 's' : ''}`,
-      deptNames || 'None',
-      'grid',
-    ],
-    [
-      `${seats.length} seats, ${invitesCount} team members`,
-      timeslots.length > 0 ? `${timeslots.length} service${timeslots.length !== 1 ? 's' : ''} configured` : 'All ready to claim',
-      'users',
-    ],
-  ];
-
-  return (
-    <Card padding={28}>
-      <div className="grid items-center gap-7" style={{ gridTemplateColumns: 'auto 1fr' }}>
-        <QRCode size={180} value={portalUrl} />
-        <div>
-          <Pill tone="teal" dot>Your portal is live</Pill>
-          <h3 className="text-[18px] font-medium mt-2.5 mb-1.5" style={{ letterSpacing: '-0.015em' }}>
-            Anyone with this link can join your queue.
-          </h3>
-          <p className="m-0 text-ink-3 text-[13.5px]">
-            Print the QR for reception or share the URL on your website and Google profile.
-          </p>
-          <div className="flex items-center gap-2.5 mt-[18px] px-3 py-2.5 bg-surface-2 border border-line rounded-[8px]">
-            <Icon name="link" size={14} className="text-ink-3" />
-            <span className="mono flex-1 text-[12.5px] text-ink">queueflow.io/q/{slug}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={copied ? 'check' : 'copy'}
-              onClick={handleCopy}
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </Button>
-          </div>
-          <div className="flex gap-2 mt-3.5">
-            <Button variant="secondary" icon="download">Download QR</Button>
-            <Button variant="secondary" icon="link">Open client portal preview</Button>
-          </div>
-        </div>
-      </div>
-      <Divider className="my-6" />
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        {summaryItems.map(([k, v, ic]) => (
-          <div key={k} className="flex gap-2.5 items-start">
-            <span
-              className="inline-flex items-center justify-center rounded-[7px] bg-teal-tint text-teal-ink flex-none"
-              style={{ width: 28, height: 28 }}
-            >
-              <Icon name={ic} size={14} />
-            </span>
-            <div>
-              <div className="text-[13px] font-medium">{k}</div>
-              <div className="text-[12px] text-ink-3">{v}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
