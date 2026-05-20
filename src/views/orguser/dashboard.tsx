@@ -26,7 +26,7 @@ interface OrgUserDashboardProps {
 const ORG_NAV: SidebarNavItem[] = [
   { id: 'queue', label: 'Queue', icon: 'users' },
   { id: 'availability', label: 'My availability', icon: 'calendar' },
-  { id: 'timeconfig', label: 'Time configurations', icon: 'clock' },
+  { id: 'timeconfig', label: 'Enable Services', icon: 'clock' },
   { id: 'notifications', label: 'Notifications', icon: 'bell' },
   { heading: 'Account' },
   { id: 'profile', label: 'Profile', icon: 'user' },
@@ -114,9 +114,9 @@ function TimeConfigView() {
   return (
     <>
       <TopBar
-        title="Time configurations"
+        title="Enable Services"
         subtitle="Choose which services you accept for your seat."
-        breadcrumb={['Dashboard', 'Time configurations']}
+        breadcrumb={['Dashboard', 'Enable Services']}
       />
       <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
         <Card padding={0} className="max-w-[720px]">

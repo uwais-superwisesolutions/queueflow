@@ -32,3 +32,9 @@ export interface UpdateClientProfilePayload {
   lastName?: string | null;
   email?: string | null;
 }
+
+export interface ClientConsultantResponse {
+  orgMemberId: string;
+  fullName: string;
+  avatarUrl: string | null;
+}
