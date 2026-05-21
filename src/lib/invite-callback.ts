@@ -16,6 +16,7 @@
 const ORG_TOKEN_KEY = 'token';
 const ORG_REFRESH_TOKEN_KEY = 'refresh_token';
 export const INVITE_PENDING_FLAG = 'invite-callback:pending';
+export const RECOVERY_PENDING_FLAG = 'recovery-callback:pending';
 
 interface DecodedInvitePayload {
   email?: string;
@@ -92,5 +93,60 @@ export function consumeInviteCallback(): boolean {
   // createBrowserRouter's route matching after it has already mounted.
   window.location.replace('/accept-invite');
 
+  return true;
+}
+
+/**
+ * Mirror of `consumeInviteCallback` for the password-recovery hash that
+ * Supabase appends when the user clicks the reset link in their email.
+ * Format: <site>/reset-password#access_token=...&type=recovery&refresh_token=...
+ *
+ * Side effects: writes the recovery access token to localStorage so the next
+ * /secure call (specifically POST /secure/auth/update-password) is authorised,
+ * drops a sessionStorage flag, strips the hash, and forces the user onto
+ * /reset-password if they happened to land elsewhere.
+ */
+export function consumeRecoveryCallback(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const hash = window.location.hash;
+  if (!hash.startsWith('#') || !hash.includes('access_token=')) return false;
+
+  const params = new URLSearchParams(hash.slice(1));
+  if (params.get('type') !== 'recovery') return false;
+
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (!accessToken) return false;
+
+  localStorage.setItem(ORG_TOKEN_KEY, accessToken);
+  if (refreshToken) localStorage.setItem(ORG_REFRESH_TOKEN_KEY, refreshToken);
+
+  // Seed the auth-store profile just enough that POST /secure/auth/update-password
+  // works. We deliberately leave organisationId / orgMemberId etc. unset — the
+  // user will land back at /login afterwards and re-authenticate.
+  const claims = decodeJwtPayload(accessToken);
+  if (claims) {
+    const profile = {
+      userId: claims.sub ?? null,
+      email: claims.email ?? null,
+      fullName: null,
+      organisationId: null,
+      organisationName: null,
+      orgMemberId: null,
+      role: null,
+      onboardingComplete: false,
+    };
+    localStorage.setItem('auth', JSON.stringify(profile));
+  }
+
+  sessionStorage.setItem(RECOVERY_PENDING_FLAG, '1');
+
+  if (window.location.pathname === '/reset-password') {
+    window.history.replaceState(null, '', '/reset-password');
+    return true;
+  }
+
+  window.location.replace('/reset-password');
   return true;
 }

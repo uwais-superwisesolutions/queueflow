@@ -11,6 +11,7 @@ const LandingScreen     = lazy(() => import('@/views/marketing/landing').then(m 
 const SignUpScreen       = lazy(() => import('@/views/marketing/sign-up').then(m => ({ default: m.SignUpScreen })))
 const LoginScreen        = lazy(() => import('@/views/marketing/login').then(m => ({ default: m.LoginScreen })))
 const AcceptInviteScreen = lazy(() => import('@/views/marketing/accept-invite').then(m => ({ default: m.AcceptInviteScreen })))
+const ResetPasswordScreen = lazy(() => import('@/views/marketing/reset-password').then(m => ({ default: m.ResetPasswordScreen })))
 
 // Onboarding
 const OnboardingScreen   = lazy(() => import('@/views/onboarding/onboarding').then(m => ({ default: m.OnboardingScreen })))
@@ -82,6 +83,10 @@ function AcceptInviteRoute() {
       }}
     />
   )
+}
+function ResetPasswordRoute() {
+  const navigate = useNavigate()
+  return <ResetPasswordScreen onDone={() => navigate('/login', { replace: true })} />
 }
 function OnboardingRoute() {
   const navigate = useNavigate()
@@ -236,6 +241,7 @@ const router = createBrowserRouter([
       { path: '/signup',         element: wrap(<SignUpRoute />) },
       { path: '/login',          element: wrap(<LoginRoute />) },
       { path: '/accept-invite',  element: wrap(<AcceptInviteRoute />) },
+      { path: '/reset-password', element: wrap(<ResetPasswordRoute />) },
     ],
   },
 

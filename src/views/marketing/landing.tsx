@@ -9,7 +9,7 @@ interface LandingScreenProps {
   onClientPortal?: () => void;
 }
 
-export function LandingScreen({ onCta, onSignIn, onClientPortal }: LandingScreenProps) {
+export function LandingScreen({ onCta, onSignIn }: LandingScreenProps) {
   return (
     <div className="min-h-[calc(100vh-48px)] bg-bg text-ink">
       <header style={{ maxWidth: 1080, margin: '0 auto', padding: '22px 32px', display: 'flex', alignItems: 'center', gap: 12 }}>

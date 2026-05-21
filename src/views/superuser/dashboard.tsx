@@ -445,7 +445,7 @@ interface DashboardBodyProps {
   setActive: (id: string) => void;
 }
 
-function DashboardBody({ now, setActive }: DashboardBodyProps) {
+function DashboardBody({ setActive }: DashboardBodyProps) {
   const [seats, setSeats] = useState<SeatResponse[]>([]);
   const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
   const [sessions, setSessions] = useState<ActiveSessionResponse[]>([]);
