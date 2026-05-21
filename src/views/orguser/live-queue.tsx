@@ -61,10 +61,27 @@ const EMPTY_QUEUE: QueueResponse = {
   inService: [],
 };
 
+// Mirrors the backend's Delay:LateStartMin / Delay:LateCheckedInMin defaults
+// (5 min). When a scheduled or checked-in booking sits past its
+// scheduled_start_at for this long, the row gets a coral border + pill so
+// the consultant notices before the SMS fires. Static value — when ops tunes
+// the backend threshold, update here to match.
+const LATE_START_THRESHOLD_MS = 5 * 60 * 1000;
+
 function clientLabel(b: BookingResponse): string {
   if (b.clientName) return b.clientName;
   if (b.clientId) return `Client ${b.clientId.slice(0, 6)}`;
   return 'Client';
+}
+
+/**
+ * True when `now` has passed `scheduled_start_at + LATE_START_THRESHOLD_MS`.
+ * The live-queue calls useTick(1000), so every render re-evaluates this and
+ * the row flips to "late" the moment the threshold trips.
+ */
+function isLate(booking: BookingResponse): boolean {
+  const start = new Date(booking.scheduledStartAt).getTime();
+  return Date.now() - start >= LATE_START_THRESHOLD_MS;
 }
 
 
@@ -421,6 +438,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
                     position={idx + 1}
                     waitingLabel={waitingLabel}
                     waitingUrgent={waitMin >= 10}
+                    lateStart={isLate(b)}
                     disabled={actingId === b.id}
                     actions={
                       <Button
@@ -450,6 +468,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
                   booking={b}
                   timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
                   accent="neutral"
+                  lateStart={isLate(b)}
                   disabled={actingId === b.id}
                   actions={
                     <>
@@ -709,6 +728,7 @@ function BookingRow({
   position,
   waitingLabel,
   waitingUrgent,
+  lateStart,
   actions,
   disabled,
 }: {
@@ -718,15 +738,29 @@ function BookingRow({
   position?: number;
   waitingLabel?: string;
   waitingUrgent?: boolean;
+  /** Coral border + "Late" pill — the SMS-side delay_late_start /
+   *  delay_wait_extended notifications fire at the same threshold so this
+   *  gives the consultant a visual heads-up before the client gets pinged. */
+  lateStart?: boolean;
   actions?: React.ReactNode;
   disabled?: boolean;
 }) {
   const label = clientLabel(booking);
   return (
-    <div className={cn(
-      'px-4 py-3 border-b border-line last:border-b-0 flex items-center gap-3',
-      disabled && 'opacity-60',
-    )}>
+    <div
+      className={cn(
+        'px-4 py-3 border-b border-line last:border-b-0 flex items-center gap-3',
+        disabled && 'opacity-60',
+      )}
+      style={
+        lateStart
+          ? {
+              borderLeft: '3px solid var(--coral)',
+              background: 'color-mix(in oklab, var(--coral-tint) 65%, transparent)',
+            }
+          : undefined
+      }
+    >
       {position !== undefined && (
         <span className="text-[11.5px] text-ink-3 w-5 text-center flex-none font-medium">
           #{position}
@@ -760,6 +794,11 @@ function BookingRow({
           )}
         </div>
       </div>
+      {lateStart && (
+        <Pill tone="coral" className="flex-none">
+          Late
+        </Pill>
+      )}
       {waitingLabel && (
         <span
           className="text-[12px] font-medium flex-none"
