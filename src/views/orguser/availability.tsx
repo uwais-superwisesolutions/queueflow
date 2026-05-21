@@ -31,6 +31,7 @@ import {
   replaceMyAvailabilityPatterns,
 } from '@/services/availabilityApi';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { fmtDate, fmtDateTime, fmtTime, todayInTz } from '@/lib/date';
 
 // API uses 0 = Sunday, but the UI shows Monday-first.
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -945,7 +946,7 @@ function ConflictModal({
                 {c.clientName ?? 'Unnamed booking'}
               </div>
               <div className="mono text-[11.5px] text-ink-3">
-                {new Date(c.scheduledStartAt).toLocaleString()} → {new Date(c.scheduledEndAt).toLocaleTimeString()}
+                {fmtDateTime(c.scheduledStartAt)} → {fmtTime(c.scheduledEndAt)}
               </div>
             </div>
           </div>
@@ -970,7 +971,7 @@ function Exceptions() {
     setLoading(true);
     setError(null);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayInTz();
       const resp = await listMyAvailabilityExceptions({ from: today });
       setItems([...resp.data].sort((a, b) => a.date.localeCompare(b.date)));
     } catch (err) {
@@ -1037,11 +1038,7 @@ function Exceptions() {
               <ExceptionTypeBadge type={e.exceptionType} />
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-medium">
-                  {new Date(e.date).toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  {fmtDate(e.date)}
                 </div>
                 <div className="text-[11.5px] text-ink-3">
                   {e.exceptionType === 'blocked'

@@ -24,6 +24,7 @@ import {
   listPortalLinks,
 } from '@/services/portalLinkApi';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { fmtDate } from '@/lib/date';
 import type {
   CreatePortalLinkPayload,
   DepartmentResponse,
@@ -224,7 +225,7 @@ function LinkCard({
           <span className="tnum text-[13px] font-medium">{link.scanCount.toLocaleString()}</span>
           <span className="text-[11.5px] text-ink-3">scans</span>
           <span className="text-[11.5px] text-ink-4 truncate">
-            · {new Date(link.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+            · {fmtDate(link.createdAt)}
           </span>
           {!link.isActive && <Pill tone="coral" className="ml-1">Inactive</Pill>}
         </div>

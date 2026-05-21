@@ -17,7 +17,7 @@ import { ProfileMenu, TopBar } from '@/components/layout';
 import { useTick } from '@/hooks/use-tick';
 import { usePolling } from '@/hooks/use-polling';
 import { POLL_INTERVAL_MS } from '@/lib/realtime-channels';
-import { formatHMS } from '@/lib/time';
+import { formatHMS, formatMS } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { useAuthStore } from '@/stores/authStore';
@@ -45,6 +45,7 @@ import type {
   SeatResponse,
   TimeslotTypeResponse,
 } from '@/types';
+import { fmtTime, minutesSince } from '@/lib/date';
 
 interface OrgUserQueueScreenProps {
   /** Called when "End shift" succeeds — route wrapper sends user to /claim. */
@@ -61,17 +62,11 @@ const EMPTY_QUEUE: QueueResponse = {
 };
 
 function clientLabel(b: BookingResponse): string {
+  if (b.clientName) return b.clientName;
   if (b.clientId) return `Client ${b.clientId.slice(0, 6)}`;
   return 'Client';
 }
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-
-function minutesBetween(a: string, b: number): number {
-  return Math.max(0, Math.floor((b - new Date(a).getTime()) / 60_000));
-}
 
 export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScreenProps) {
   const fullName = useAuthStore((s) => s.fullName);
@@ -296,7 +291,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
         </div>
         <span className="flex items-center gap-1.5 text-[12px] text-ink-3 flex-none">
           <span className="qf-live-dot" />
-          {updatedAt ? `Updated ${minutesBetween(new Date(updatedAt).toISOString(), Date.now())}m ago` : 'Live'}
+          {updatedAt ? `Updated ${minutesSince(new Date(updatedAt).toISOString())}m ago` : 'Live'}
         </span>
         <Button
           variant="secondary"
@@ -358,6 +353,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
           <div className="flex flex-col gap-4">
             <QueueSection
               title="Pending approval"
+              subtitle="New requests need your sign-off before they're held."
               count={queue.pendingApproval.length}
               accent="amber"
               empty="No requests waiting for you."
@@ -376,6 +372,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
 
             <QueueSection
               title="In service now"
+              subtitle="The client you're seeing right now."
               count={queue.inService.length}
               accent="blue"
               empty="Nobody is in service right now."
@@ -394,6 +391,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
 
             <QueueSection
               title="Checked in"
+              subtitle="In the waiting room, in order."
               count={queue.checkedIn.length}
               accent="teal"
               empty="No clients in the waiting room."
@@ -411,40 +409,37 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
                 ) : undefined
               }
             >
-              {queue.checkedIn.map((b) => (
-                <BookingRow
-                  key={b.id}
-                  booking={b}
-                  timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
-                  accent="teal"
-                  disabled={actingId === b.id}
-                  actions={
-                    <>
+              {queue.checkedIn.map((b, idx) => {
+                const waitMin = minutesSince(b.actualStartAt ?? b.createdAt);
+                const waitingLabel = waitMin <= 1 ? 'Just arrived' : `Waiting ${waitMin}m`;
+                return (
+                  <BookingRow
+                    key={b.id}
+                    booking={b}
+                    timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                    accent="teal"
+                    position={idx + 1}
+                    waitingLabel={waitingLabel}
+                    waitingUrgent={waitMin >= 10}
+                    disabled={actingId === b.id}
+                    actions={
                       <Button
                         variant="ghost"
                         size="sm"
-                        icon="user"
                         onClick={() => handleStart(b)}
                         disabled={actingId === b.id}
                       >
-                        Start
+                        →
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleNoShow(b)}
-                        disabled={actingId === b.id}
-                      >
-                        No-show
-                      </Button>
-                    </>
-                  }
-                />
-              ))}
+                    }
+                  />
+                );
+              })}
             </QueueSection>
 
             <QueueSection
               title="Scheduled today"
+              subtitle="Upcoming, not yet checked in."
               count={queue.scheduled.length}
               accent="neutral"
               empty="No upcoming bookings today."
@@ -464,18 +459,14 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
                         icon="check"
                         onClick={() => handleCheckIn(b)}
                         disabled={actingId === b.id}
-                      >
-                        Check in
-                      </Button>
+                      />
                       <Button
                         variant="ghost"
                         size="sm"
                         icon="trash"
                         onClick={() => handleCancel(b)}
                         disabled={actingId === b.id}
-                      >
-                        Cancel
-                      </Button>
+                      />
                     </>
                   }
                 />
@@ -515,6 +506,7 @@ const SECTION_ACCENT: Record<string, string> = {
 
 function QueueSection({
   title,
+  subtitle,
   count,
   accent,
   empty,
@@ -522,6 +514,7 @@ function QueueSection({
   children,
 }: {
   title: string;
+  subtitle?: string;
   count: number;
   accent: 'amber' | 'blue' | 'teal' | 'neutral';
   empty: string;
@@ -539,6 +532,9 @@ function QueueSection({
         <Pill tone={accent === 'neutral' ? 'neutral' : (accent as 'amber' | 'blue' | 'teal')}>
           {count}
         </Pill>
+        {subtitle && (
+          <span className="text-[11.5px] text-ink-3 hidden sm:block">{subtitle}</span>
+        )}
         <span className="flex-1" />
         {action}
       </div>
@@ -567,46 +563,52 @@ function PendingCard({
   const holdRemaining = booking.heldUntil
     ? Math.max(0, new Date(booking.heldUntil).getTime() - Date.now())
     : 0;
+  const label = clientLabel(booking);
   return (
-    <div className="px-4 py-3 border-b border-line last:border-b-0 flex items-start gap-3">
-      <Avatar name={clientLabel(booking)} size={32} />
+    <div className="px-4 py-3 border-b border-line last:border-b-0 flex items-center gap-3">
+      <Avatar name={label} size={36} />
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium">
-          {clientLabel(booking)}
-          {booking.clientReason && (
-            <span className="font-normal text-ink-3"> · {booking.clientReason}</span>
-          )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[13.5px] font-medium">{label}</span>
+          <Pill tone="amber">New</Pill>
         </div>
-        <div className="text-[11.5px] text-ink-3 mt-0.5 flex items-center gap-2 flex-wrap">
-          <span>Requested {fmtTime(booking.scheduledStartAt)}</span>
+        <div className="text-[11.5px] text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
           {timeslot && (
-            <>
-              <span className="text-ink-4">·</span>
+            <span
+              className="inline-flex items-center gap-1"
+              style={{ color: timeslot.color ?? 'var(--ink-3)' }}
+            >
               <span
-                className="inline-flex items-center gap-1"
-                style={{ color: timeslot.color ?? 'var(--ink-3)' }}
-              >
-                <Icon name="clock" size={10} />
-                {timeslot.name} · {timeslot.durationMinutes} min
-              </span>
-            </>
+                className="inline-block rounded-full flex-none"
+                style={{ width: 7, height: 7, background: timeslot.color ?? 'var(--ink-3)' }}
+              />
+              {timeslot.name} · {timeslot.durationMinutes} min
+            </span>
           )}
-          {holdRemaining > 0 && (
+          {timeslot && <span className="text-ink-4">·</span>}
+          <span>requested {fmtTime(booking.scheduledStartAt)}</span>
+          {booking.clientReason && (
             <>
               <span className="text-ink-4">·</span>
-              <span className="mono">
-                hold {formatHMS(holdRemaining).slice(3)}
-              </span>
+              <span className="truncate max-w-[200px]">&ldquo;{booking.clientReason}&rdquo;</span>
             </>
           )}
         </div>
       </div>
-      <div className="flex gap-1.5">
-        <Button variant="primary" size="sm" onClick={onApprove} disabled={disabled}>
-          Approve
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onReject} disabled={disabled}>
+      {holdRemaining > 0 && (
+        <div className="text-right flex-none">
+          <div className="mono text-[13px] font-medium" style={{ color: 'var(--amber)' }}>
+            Hold {formatMS(Math.floor(holdRemaining / 1000))}
+          </div>
+          <div className="text-[10px] text-ink-4 uppercase tracking-wide">Before expires</div>
+        </div>
+      )}
+      <div className="flex gap-1.5 flex-none">
+        <Button variant="ghost" size="sm" icon="x" onClick={onReject} disabled={disabled}>
           Reject
+        </Button>
+        <Button variant="primary" size="sm" icon="check" onClick={onApprove} disabled={disabled}>
+          Approve
         </Button>
       </div>
     </div>
@@ -626,22 +628,43 @@ function InServiceCard({
   onNoShow: () => void;
   disabled?: boolean;
 }) {
+  const label = clientLabel(booking);
   const started = booking.actualStartAt ?? booking.scheduledStartAt;
-  const elapsed = Math.max(0, Date.now() - new Date(started).getTime());
+  const elapsedMs = Math.max(0, Date.now() - new Date(started).getTime());
+  const elapsedSec = Math.floor(elapsedMs / 1000);
+  const scheduledDurationSec = Math.round(
+    (new Date(booking.scheduledEndAt).getTime() - new Date(booking.scheduledStartAt).getTime()) / 1000
+  );
+  const remainingSec = Math.max(0, scheduledDurationSec - elapsedSec);
+  const remainingMin = Math.ceil(remainingSec / 60);
+  const overTime = elapsedSec > scheduledDurationSec;
+
   return (
-    <div className="px-4 py-4 flex items-center gap-4 flex-wrap">
-      <Avatar name={clientLabel(booking)} size={44} active />
+    <div
+      className="px-4 py-4 flex items-center gap-4 flex-wrap"
+      style={{ background: 'var(--blue-tint, #f0f5ff)' }}
+    >
+      <Avatar name={label} size={44} active />
       <div className="flex-1 min-w-0">
-        <div className="text-[14.5px] font-medium">{clientLabel(booking)}</div>
-        <div className="text-[12px] text-ink-3 mt-0.5 flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[14.5px] font-medium">{label}</span>
+          <Pill tone="blue">In service</Pill>
+        </div>
+        <div className="text-[12px] text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
           {timeslot && (
             <span
               className="inline-flex items-center gap-1"
               style={{ color: timeslot.color ?? 'var(--ink-3)' }}
             >
-              <Icon name="clock" size={11} /> {timeslot.name}
+              <span
+                className="inline-block rounded-full flex-none"
+                style={{ width: 7, height: 7, background: timeslot.color ?? 'var(--ink-3)' }}
+              />
+              {timeslot.name} · {timeslot.durationMinutes} min scheduled
             </span>
           )}
+          <span className="text-ink-4">·</span>
+          <span>started {fmtTime(started)}</span>
           {booking.clientReason && (
             <>
               <span className="text-ink-4">·</span>
@@ -649,25 +672,31 @@ function InServiceCard({
             </>
           )}
         </div>
-      </div>
-      <div className="text-right">
-        <div
-          className="mono tnum text-[26px] font-medium"
-          style={{ letterSpacing: '-0.01em' }}
-        >
-          {formatHMS(elapsed)}
+        <div className="flex items-center gap-3 mt-2.5 flex-wrap">
+          <Button variant="primary" size="sm" icon="check" onClick={onComplete} disabled={disabled}>
+            Complete consult
+          </Button>
+          <Button variant="ghost" size="sm" icon="user" onClick={onNoShow} disabled={disabled}>
+            Mark no-show
+          </Button>
         </div>
-        <div className="text-[10.5px] text-ink-3 uppercase" style={{ letterSpacing: '0.06em' }}>
+      </div>
+      <div
+        className="rounded-[12px] border border-line bg-surface px-4 py-3 text-center flex-none"
+        style={{ minWidth: 96 }}
+      >
+        <div className="text-[9px] text-ink-4 uppercase tracking-[0.07em] font-semibold mb-1">
           Elapsed
         </div>
-      </div>
-      <div className="flex gap-1.5">
-        <Button variant="primary" icon="check" onClick={onComplete} disabled={disabled}>
-          Complete
-        </Button>
-        <Button variant="ghost" onClick={onNoShow} disabled={disabled}>
-          No-show
-        </Button>
+        <div
+          className="mono tnum text-[26px] font-medium leading-none"
+          style={{ color: overTime ? 'var(--coral-2)' : 'var(--blue)', letterSpacing: '-0.01em' }}
+        >
+          {formatHMS(elapsedSec)}
+        </div>
+        <div className="text-[10.5px] text-ink-3 mt-1">
+          {overTime ? `+${Math.ceil((elapsedSec - scheduledDurationSec) / 60)}m over` : `${remainingMin} min left`}
+        </div>
       </div>
     </div>
   );
@@ -677,31 +706,52 @@ function BookingRow({
   booking,
   timeslot,
   accent,
+  position,
+  waitingLabel,
+  waitingUrgent,
   actions,
   disabled,
 }: {
   booking: BookingResponse;
   timeslot?: TimeslotTypeResponse;
   accent: 'teal' | 'neutral';
+  position?: number;
+  waitingLabel?: string;
+  waitingUrgent?: boolean;
   actions?: React.ReactNode;
   disabled?: boolean;
 }) {
+  const label = clientLabel(booking);
   return (
     <div className={cn(
       'px-4 py-3 border-b border-line last:border-b-0 flex items-center gap-3',
       disabled && 'opacity-60',
     )}>
-      <Avatar name={clientLabel(booking)} size={28} active={accent === 'teal'} />
+      {position !== undefined && (
+        <span className="text-[11.5px] text-ink-3 w-5 text-center flex-none font-medium">
+          #{position}
+        </span>
+      )}
+      <Avatar name={label} size={32} active={accent === 'teal'} />
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium truncate">{clientLabel(booking)}</div>
+        <div className="text-[13px] font-medium truncate">{label}</div>
         <div className="text-[11.5px] text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
-          <span className="mono tnum">{fmtTime(booking.scheduledStartAt)}</span>
           {timeslot && (
-            <>
-              <span className="text-ink-4">·</span>
-              <span style={{ color: timeslot.color ?? 'var(--ink-3)' }}>{timeslot.name}</span>
-            </>
+            <span
+              className="inline-flex items-center gap-1"
+              style={{ color: timeslot.color ?? 'var(--ink-3)' }}
+            >
+              <span
+                className="inline-block rounded-full flex-none"
+                style={{ width: 6, height: 6, background: timeslot.color ?? 'var(--ink-3)' }}
+              />
+              {timeslot.name}
+            </span>
           )}
+          <span className="text-ink-4">·</span>
+          <span className="mono tnum">
+            {accent === 'teal' ? `scheduled ${fmtTime(booking.scheduledStartAt)}` : fmtTime(booking.scheduledStartAt)}
+          </span>
           {booking.clientReason && (
             <>
               <span className="text-ink-4">·</span>
@@ -710,6 +760,14 @@ function BookingRow({
           )}
         </div>
       </div>
+      {waitingLabel && (
+        <span
+          className="text-[12px] font-medium flex-none"
+          style={{ color: waitingUrgent ? 'var(--coral-2)' : 'var(--ink-2)' }}
+        >
+          {waitingLabel}
+        </span>
+      )}
       <div className="flex gap-1.5 flex-none">{actions}</div>
     </div>
   );

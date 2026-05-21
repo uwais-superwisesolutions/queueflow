@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PhoneFrame } from '@/components/layout';
 import { Icon, Button, SkeletonBox, SkeletonLine } from '@/components/ui';
 import { formatMS } from '@/lib/time';
+import { fmtTime, durationMinutes } from '@/lib/date';
 import { getApiErrorMessage } from '@/lib/api-error';
 import {
   cancelMyClientBooking,
@@ -26,13 +27,7 @@ interface ClientConfirmationScreenProps {
 
 const POLL_INTERVAL_MS = 4_000;
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
 
-function durationMin(slot: SlotResponse): number {
-  return Math.round((new Date(slot.endAt).getTime() - new Date(slot.startAt).getTime()) / 60_000);
-}
 
 export function ClientConfirmationScreen({ slot, clientReason, onResolved, onPickAnother }: ClientConfirmationScreenProps) {
   const [booking, setBooking] = useState<BookingResponse | null>(null);
@@ -182,7 +177,7 @@ export function ClientConfirmationScreen({ slot, clientReason, onResolved, onPic
                 </div>
                 <div className="text-[13px] mt-1 flex items-center gap-1.5">
                   <span className="w-[7px] h-[7px] rounded-[2px] bg-teal flex-none" />
-                  {durationMin(slot)} min
+                  {durationMinutes(slot.startAt, slot.endAt)} min
                 </div>
               </div>
             </div>

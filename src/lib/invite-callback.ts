@@ -80,14 +80,17 @@ export function consumeInviteCallback(): boolean {
 
   sessionStorage.setItem(INVITE_PENDING_FLAG, '1');
 
-  // Drop the hash from the URL — leaves `/` clean. Use replaceState so we
-  // don't push a history entry.
-  const cleanUrl = `${window.location.pathname}${window.location.search}`;
-  window.history.replaceState(null, '', cleanUrl);
+  // If we're already on /accept-invite (Supabase redirected here directly),
+  // just strip any leftover hash/search and let the page render normally.
+  if (window.location.pathname === '/accept-invite') {
+    window.history.replaceState(null, '', '/accept-invite');
+    return true;
+  }
 
-  // Redirect to the accept-invite flow. The hash is already stripped above,
-  // so a soft navigation is enough.
-  window.history.replaceState(null, '', '/accept-invite');
+  // We're on a different path (e.g. '/') — do a hard redirect so the router
+  // re-initialises at /accept-invite. replaceState alone doesn't re-trigger
+  // createBrowserRouter's route matching after it has already mounted.
+  window.location.replace('/accept-invite');
 
   return true;
 }

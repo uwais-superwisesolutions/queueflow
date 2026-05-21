@@ -4,6 +4,7 @@ import { PhoneFrame } from '@/components/layout';
 import { Icon, Button, Pill, SkeletonBox, Field, SelectInput } from '@/components/ui';
 import { searchSlots } from '@/services/slotApi';
 import { listClientConsultants, listClientTimeslotTypes } from '@/services/clientApi';
+import { fmtTime, durationMinutes } from '@/lib/date';
 import { getApiErrorMessage } from '@/lib/api-error';
 import type {
   ClientConsultantResponse,
@@ -32,14 +33,6 @@ function isoDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-}
-
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-
-function durationMin(slot: SlotResponse): number {
-  return Math.round((new Date(slot.endAt).getTime() - new Date(slot.startAt).getTime()) / 60_000);
 }
 
 export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScreenProps) {
@@ -170,7 +163,7 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
   const handleSelect = (slot: SlotResponse) => {
     onSelect({
       slot,
-      label: `${fmtTime(slot.startAt)} · ${durationMin(slot)} min`,
+      label: `${fmtTime(slot.startAt)} · ${durationMinutes(slot.startAt, slot.endAt)} min`,
     });
   };
 
@@ -270,7 +263,7 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
                   {fmtTime(earliest.startAt)}
                 </div>
                 <div className="text-[11.5px] text-ink-3 truncate">
-                  {durationMin(earliest)} min
+                  {durationMinutes(earliest.startAt, earliest.endAt)} min
                 </div>
               </div>
               <div className="mono tnum text-[18px] font-medium text-teal-ink">
@@ -319,7 +312,7 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
                 <span className="mono tnum text-[14px] font-medium">
                   {fmtTime(s.startAt)}
                 </span>
-                <span className="text-[10px] text-ink-3">{durationMin(s)} min</span>
+                <span className="text-[10px] text-ink-3">{durationMinutes(s.startAt, s.endAt)} min</span>
               </button>
             ))}
           </div>

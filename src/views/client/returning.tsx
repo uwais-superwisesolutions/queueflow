@@ -4,6 +4,7 @@ import { PhoneFrame } from '@/components/layout';
 import { Icon, Button, Avatar, Pill, SkeletonBox, SkeletonLine } from '@/components/ui';
 import { getClientMe } from '@/services/clientApi';
 import { listMyClientBookings } from '@/services/clientBookingApi';
+import { fmtDate } from '@/lib/date';
 import { getApiErrorMessage } from '@/lib/api-error';
 import type { BookingResponse, ClientProfileResponse } from '@/types';
 
@@ -16,11 +17,6 @@ function fullName(p: ClientProfileResponse | null): string {
   if (!p) return 'there';
   const parts = [p.firstName, p.lastName].filter(Boolean) as string[];
   return parts.length ? parts.join(' ') : 'there';
-}
-
-function fmtVisit(b: BookingResponse): string {
-  const d = new Date(b.scheduledStartAt);
-  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 const COMPLETED_STATUSES = new Set(['completed', 'no_show', 'cancelled', 'rejected', 'expired']);
@@ -100,7 +96,7 @@ export function ClientReturningScreen({ onContinue, onBack }: ClientReturningScr
                 </div>
                 <div className="text-[12px] text-ink-3 mt-0.5">
                   {lastVisit
-                    ? `Last visit: ${fmtVisit(lastVisit)}`
+                    ? `Last visit: ${fmtDate(lastVisit.scheduledStartAt)}`
                     : 'First time booking with us today'}
                 </div>
               </div>
@@ -131,7 +127,7 @@ export function ClientReturningScreen({ onContinue, onBack }: ClientReturningScr
                         <div className="text-[13px] font-medium truncate">
                           {b.clientReason ?? 'Visit'}
                         </div>
-                        <div className="mono text-[11px] text-ink-3">{fmtVisit(b)}</div>
+                        <div className="mono text-[11px] text-ink-3">{fmtDate(b.scheduledStartAt)}</div>
                       </div>
                       <Pill
                         tone={b.status === 'completed' ? 'success' : 'neutral'}

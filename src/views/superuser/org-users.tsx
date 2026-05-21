@@ -1,11 +1,12 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Button, Card, Field, Icon, Modal, Pill, SelectInput, TextInput } from '@/components/ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Avatar, Button, Card, Field, Icon, Modal, Pill, SelectInput, TextInput, useConfirm } from '@/components/ui';
 import { TopBar } from '@/components/layout';
 import type { InvitationResponse, MemberResponse, MemberRole, SeatResponse } from '@/types';
-import { getInvitations, getMembers, inviteUser } from '@/services/organisationApi';
+import { deleteMember, getInvitations, getMembers, inviteUser } from '@/services/organisationApi';
 import { listSeats } from '@/services/seatApi';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { fmtDate } from '@/lib/date';
 import {
   DataGrid,
   EmptyState,
@@ -29,6 +30,7 @@ interface UnifiedRow {
   status: MemberStatus;
   lastActivity: string;
   isInvite: boolean;
+  orgMemberId: string | null;
 }
 
 function relativeTime(iso: string): string {
@@ -42,7 +44,7 @@ function relativeTime(iso: string): string {
   if (hours < 24) return `${hours} h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} d ago`;
-  return new Date(iso).toLocaleDateString();
+  return fmtDate(iso);
 }
 
 export function OrgUsersView() {
@@ -54,6 +56,8 @@ export function OrgUsersView() {
   const [tab, setTab] = useState<OrgTab>('all');
   const [query, setQuery] = useState('');
   const [showInvite, setShowInvite] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const reload = async () => {
     setLoading(true);
@@ -87,6 +91,7 @@ export function OrgUsersView() {
       status: (m.status === 'suspended' ? 'suspended' : 'active') as MemberStatus,
       lastActivity: m.joinedAt,
       isInvite: false,
+      orgMemberId: m.orgMemberId,
     }));
 
     const inviteRows: UnifiedRow[] = invitations
@@ -99,6 +104,7 @@ export function OrgUsersView() {
         status: (i.accepted ? 'accepted' : 'invited') as MemberStatus,
         lastActivity: i.createdAt,
         isInvite: true,
+        orgMemberId: null,
       }));
 
     return [...memberRows, ...inviteRows].sort((a, b) => a.email.localeCompare(b.email));
@@ -119,11 +125,33 @@ export function OrgUsersView() {
     { id: 'invited', label: 'Invited', count: rows.filter((r) => r.isInvite).length },
   ];
 
+  const handleDelete = async (row: UnifiedRow) => {
+    if (!row.orgMemberId) return;
+    const ok = await confirm({
+      title: `Remove ${row.fullName}?`,
+      body: `${row.email} will lose access to this organisation immediately. This cannot be undone.`,
+      confirmLabel: 'Remove member',
+      cancelLabel: 'Keep them',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setDeletingId(row.orgMemberId);
+    try {
+      await deleteMember(row.orgMemberId);
+      await reload();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not remove member.'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const columns: DataGridColumn[] = [
     { key: 'name', label: 'Person', width: 'minmax(0, 2fr)' },
     { key: 'role', label: 'Role', width: 'minmax(0, 1fr)' },
     { key: 'last', label: 'Joined / invited', width: 'minmax(0, 1.2fr)' },
     { key: 'status', label: 'Status', width: 'minmax(0, 1fr)' },
+    { key: 'actions', label: '', width: '40px' },
   ];
 
   const gridRows: DataGridRow[] = filtered.map((r) => ({
@@ -140,6 +168,12 @@ export function OrgUsersView() {
     role: <Pill tone={r.role === 'super_user' ? 'teal' : 'neutral'}>{roleLabel(r.role)}</Pill>,
     last: <span className="text-[12px] text-ink-3">{relativeTime(r.lastActivity)}</span>,
     status: <StatusBadge status={r.status} />,
+    actions: r.orgMemberId ? (
+      <RowMenu
+        disabled={deletingId === r.orgMemberId}
+        onDelete={() => handleDelete(r)}
+      />
+    ) : null,
   }));
 
   return (
@@ -211,6 +245,49 @@ export function OrgUsersView() {
 
 function roleLabel(role: MemberRole): string {
   return role === 'super_user' ? 'Super user' : 'Org user';
+}
+
+function RowMenu({ onDelete, disabled }: { onDelete: () => void; disabled?: boolean }) {
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const open = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = btnRef.current!.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  };
+
+  return (
+    <div className="flex items-center justify-end">
+      <button
+        ref={btnRef}
+        className="w-7 h-7 rounded-[6px] flex items-center justify-center text-ink-3 hover:bg-surface-2 hover:text-ink transition-colors border-0 bg-transparent cursor-pointer"
+        onClick={open}
+        disabled={disabled}
+        aria-label="More options"
+      >
+        <Icon name="dotsH" size={14} />
+      </button>
+
+      {pos && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setPos(null)} />
+          <div
+            className="fixed z-50 rounded-[10px] border border-line bg-surface shadow-md py-1"
+            style={{ top: pos.top, right: pos.right, minWidth: 148 }}
+          >
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 text-[12.5px] text-coral hover:bg-surface-2 transition-colors border-0 bg-transparent cursor-pointer text-left"
+              onClick={() => { setPos(null); onDelete(); }}
+            >
+              <Icon name="trash" size={13} />
+              Remove member
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 interface InviteModalProps {

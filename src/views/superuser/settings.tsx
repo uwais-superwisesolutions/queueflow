@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react';
 import { Button, Card, Field, Icon, Modal, TextInput, useConfirm } from '@/components/ui';
+import { fmtDate } from '@/lib/date';
 import { TopBar } from '@/components/layout';
 import type { OrganisationResponse, PublicHolidayResponse } from '@/types';
 import { getOrganisation, updateBranding } from '@/services/organisationApi';
@@ -252,12 +253,7 @@ function PublicHolidaysSection() {
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-medium truncate">{h.name}</div>
                   <div className="mono text-[11.5px] text-ink-3">
-                    {new Date(h.date).toLocaleDateString(undefined, {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
+                    {fmtDate(h.date)}
                   </div>
                 </div>
                 <button
