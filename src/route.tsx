@@ -122,9 +122,15 @@ function ClientOTPRoute() {
   return (
     <ClientOTPScreen
       phone={phone}
-      onContinue={({ isNewClient }) =>
-        navigate(isNewClient ? '/client/details' : '/client/slots', { replace: true })
-      }
+      onContinue={({ isNewClient, hasActiveBooking }) => {
+        // New clients capture profile details before booking. Returning
+        // clients with an active booking jump straight to /client/status (e.g.
+        // arrived from an SMS link to monitor their spot). Everyone else
+        // lands on the slot picker.
+        if (isNewClient) navigate('/client/details', { replace: true })
+        else if (hasActiveBooking) navigate('/client/status', { replace: true })
+        else navigate('/client/slots', { replace: true })
+      }}
       onBack={() => navigate('/client')}
     />
   )

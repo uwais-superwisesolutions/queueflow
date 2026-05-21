@@ -14,7 +14,8 @@ function isPublicClientRoute(url: string) {
   return (
     url.startsWith('/api/client/phone/verify') ||
     url.startsWith('/api/client/phone/confirm') ||
-    /^\/api\/client\/portal-links\/[^/]+\/scan$/.test(url)
+    /^\/api\/client\/portal-links\/[^/]+\/scan$/.test(url) ||
+    /^\/api\/client\/orgs\/[^/]+$/.test(url)
   )
 }
 

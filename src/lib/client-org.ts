@@ -1,4 +1,5 @@
 import { scanPortalLink } from '@/services/portalLinkApi';
+import { getClientOrgInfo } from '@/services/clientApi';
 import type { PortalScanResponse } from '@/types';
 
 /**
@@ -58,8 +59,10 @@ function persistScan(scan: PortalScanResponse) {
 
 /**
  * If the current URL has `?slug=<slug>`, hits the scan endpoint and caches the
- * resulting org metadata. Returns the cached metadata otherwise. Returns null
- * if neither slug nor cache is available.
+ * resulting org metadata. Otherwise, if `?org=<uuid>` is present (or just an
+ * orgId is cached) but no scan, falls back to the anonymous org-info lookup
+ * so a cold SMS link can still render branded headers. Returns null if no
+ * org context is available at all.
  */
 export async function resolvePortalScan(): Promise<PortalScanResponse | null> {
   const slug = param('slug');
@@ -69,11 +72,35 @@ export async function resolvePortalScan(): Promise<PortalScanResponse | null> {
       persistScan(resp.data);
       return resp.data;
     } catch {
-      // Fall through to cache — a stale cached org is better than nothing if
-      // the user is offline / the slug is invalid.
+      // Fall through to org-info / cache — a stale cached org is better than
+      // nothing if the user is offline / the slug is invalid.
     }
   }
-  return getCachedPortalScan();
+
+  const cached = getCachedPortalScan();
+  const orgId = resolveClientOrgId();
+
+  // SMS deep-link path: we have an orgId from the URL/cache, but no scan yet
+  // (or the cached scan is for a different org). Fetch the anonymous org info
+  // and synthesise a scan-shaped response so the rest of the UI can use it.
+  if (orgId && (!cached || cached.orgId !== orgId)) {
+    try {
+      const resp = await getClientOrgInfo(orgId);
+      const synthesised: PortalScanResponse = {
+        orgId: resp.data.orgId,
+        orgName: resp.data.orgName,
+        logoUrl: resp.data.logoUrl,
+        brandColor: resp.data.brandColor,
+        scope: { type: 'org', id: null, name: null },
+      };
+      persistScan(synthesised);
+      return synthesised;
+    } catch {
+      // Fall through to cached value (if any).
+    }
+  }
+
+  return cached;
 }
 
 export function clearClientOrg() {

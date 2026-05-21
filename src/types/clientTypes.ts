@@ -38,3 +38,14 @@ export interface ClientConsultantResponse {
   fullName: string;
   avatarUrl: string | null;
 }
+
+/**
+ * Anonymous shape returned by `GET /api/client/orgs/{orgId}` so a cold SMS
+ * link with `?org=<uuid>` can bootstrap org branding before the user OTPs in.
+ */
+export interface ClientOrgInfoResponse {
+  orgId: string;
+  orgName: string;
+  logoUrl: string | null;
+  brandColor: string | null;
+}

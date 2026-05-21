@@ -3,13 +3,26 @@ import { PhoneFrame } from '@/components/layout';
 import { Icon, Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { confirmClientOtp, requestClientOtp } from '@/services/clientAuthApi';
+import { listMyClientBookings } from '@/services/clientBookingApi';
 import { resolveClientOrgId } from '@/lib/client-org';
 import { useClientAuthStore } from '@/stores/clientAuthStore';
 import { getApiErrorMessage } from '@/lib/api-error';
+import type { BookingStatus } from '@/types';
 
 export interface ClientOTPResult {
   isNewClient: boolean;
+  /** True when the returning client has at least one in-flight booking — used
+   *  to land them on /client/status (e.g. arriving from an SMS link) instead
+   *  of the slot picker. */
+  hasActiveBooking: boolean;
 }
+
+const ACTIVE_STATUSES = new Set<BookingStatus>([
+  'pending_approval',
+  'scheduled',
+  'checked_in',
+  'in_service',
+]);
 
 interface ClientOTPScreenProps {
   phone: string;
@@ -71,7 +84,21 @@ export function ClientOTPScreen({ phone, onContinue, onBack }: ClientOTPScreenPr
     try {
       const response = await confirmClientOtp({ orgId, phone, code });
       setSession(response.data, orgId, phone);
-      onContinue({ isNewClient: response.data.isNewClient });
+
+      // For returning clients, peek at their bookings so the route wrapper can
+      // send them to /client/status (their active spot) rather than the slot
+      // picker. New clients always have no bookings yet, so skip the call.
+      let hasActiveBooking = false;
+      if (!response.data.isNewClient) {
+        try {
+          const bookings = await listMyClientBookings();
+          hasActiveBooking = bookings.data.some((b) => ACTIVE_STATUSES.has(b.status));
+        } catch {
+          // Non-fatal — fall back to the slot picker.
+        }
+      }
+
+      onContinue({ isNewClient: response.data.isNewClient, hasActiveBooking });
     } catch (err) {
       setError(getApiErrorMessage(err, 'That code didn\'t work. Try again.'));
     } finally {

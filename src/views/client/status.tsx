@@ -166,7 +166,13 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
     );
   }
 
-  const minsUntil = Math.max(0, Math.floor((new Date(booking.scheduledStartAt).getTime() - Date.now()) / 1000));
+  // Seconds-until-scheduled. (The legacy name was `minsUntil` but the math is
+  // ms → seconds; passing it again multiplied by 1000 to formatHMS inflated
+  // the displayed countdown 1000×.)
+  const secondsUntil = Math.max(
+    0,
+    Math.floor((new Date(booking.scheduledStartAt).getTime() - Date.now()) / 1000),
+  );
 
   return (
     <PhoneFrame>
@@ -240,7 +246,7 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
               className="mono tnum text-teal-ink mt-1.5"
               style={{ fontSize: 38, fontWeight: 500, letterSpacing: '-0.03em' }}
             >
-              {booking.status === 'in_service' ? 'Now' : formatHMS(minsUntil * 1000)}
+              {booking.status === 'in_service' ? 'Now' : formatHMS(secondsUntil)}
             </div>
             <div className="text-[11.5px] text-ink-3 mt-1">
               Around {fmtTime(booking.scheduledStartAt)} · we'll text you 5 min before

@@ -1,10 +1,23 @@
 import api from './interceptor';
 import type {
   ClientConsultantResponse,
+  ClientOrgInfoResponse,
   ClientProfileResponse,
   TimeslotTypeResponse,
   UpdateClientProfilePayload,
 } from '@/types';
+
+/**
+ * Anonymous lookup — no client JWT required (path is in Program.cs's
+ * ClientAuthMiddleware exemption list). Used to render org branding on a
+ * cold SMS link before the user has OTP'd in.
+ */
+export function getClientOrgInfo(orgId: string) {
+  return api.request<ClientOrgInfoResponse>({
+    url: `/api/client/orgs/${orgId}`,
+    method: 'GET',
+  });
+}
 
 export function getClientMe() {
   return api.request<ClientProfileResponse>({
