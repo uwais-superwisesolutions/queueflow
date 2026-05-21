@@ -137,11 +137,11 @@ export function OrgUserClaimScreen({ onClaim, onSignOut }: OrgUserClaimScreenPro
 
   return (
     <div className="min-h-screen bg-bg flex flex-col">
-      <header className="px-8 py-5 border-b border-line bg-surface flex items-center gap-4">
+      <header className="px-4 sm:px-8 py-4 sm:py-5 border-b border-line bg-surface flex flex-wrap items-center gap-4">
         <QFLogo size={18} />
         <span className="text-[12.5px] text-ink-3 truncate">{orgName ?? 'Your organisation'}</span>
         <span className="flex-1" />
-        <div style={{ width: 220 }}>
+        <div className="w-full sm:w-[220px]">
           <ProfileMenu
             fullName={fullName ?? ''}
             email={email}
@@ -160,7 +160,7 @@ export function OrgUserClaimScreen({ onClaim, onSignOut }: OrgUserClaimScreenPro
         </div>
       </header>
 
-      <main className="flex-1 flex justify-center px-8 py-12">
+      <main className="flex-1 flex justify-center px-4 sm:px-8 py-8 sm:py-12">
         <div className="w-full max-w-[880px]">
           <h1 className="m-0 mb-1.5 text-[26px] font-medium tracking-[-0.025em]">
             {greeting}
@@ -184,7 +184,7 @@ export function OrgUserClaimScreen({ onClaim, onSignOut }: OrgUserClaimScreenPro
           )}
 
           {loading ? (
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+            <div className="qf-card-grid gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="border border-line rounded-[12px] p-4 bg-surface">
                   <div className="flex items-center gap-[10px]">
@@ -205,7 +205,7 @@ export function OrgUserClaimScreen({ onClaim, onSignOut }: OrgUserClaimScreenPro
               No seats configured yet. Ask your super user to add one.
             </div>
           ) : (
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+            <div className="qf-card-grid gap-3">
               {tiles.map((tile) => {
                 const taken = tile.claimedBy != null && !tile.isMine;
                 const claiming = claimingId === tile.id;

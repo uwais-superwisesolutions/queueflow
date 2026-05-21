@@ -72,7 +72,7 @@ export function SelectInput({ options, wrapClassName, className, ...rest }: Sele
   return (
     <span
       className={cn(
-        'relative inline-flex items-center bg-surface border border-line-2 rounded-[8px]',
+        'relative inline-flex items-center min-w-0 max-w-full bg-surface border border-line-2 rounded-[8px]',
         'pl-[10px] pr-[28px] h-[38px] text-ink',
         wrapClassName,
       )}

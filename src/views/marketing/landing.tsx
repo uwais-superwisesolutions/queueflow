@@ -12,25 +12,24 @@ interface LandingScreenProps {
 export function LandingScreen({ onCta, onSignIn }: LandingScreenProps) {
   return (
     <div className="min-h-[calc(100vh-48px)] bg-bg text-ink">
-      <header style={{ maxWidth: 1080, margin: '0 auto', padding: '22px 32px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <header className="px-4 sm:px-8" style={{ maxWidth: 1080, margin: '0 auto', paddingTop: 22, paddingBottom: 22, display: 'flex', alignItems: 'center', gap: 12 }}>
         <QFLogo size={20} />
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span className="flex-wrap justify-end" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <Button variant="ghost" size="sm" onClick={onSignIn}>Sign in</Button>
           <Button variant="primary" size="sm" onClick={onCta} iconRight="arrowR">Create an account</Button>
         </span>
       </header>
 
-      <section style={{
+      <section className="qf-landing-hero px-4 sm:px-8" style={{
         maxWidth: 1080, margin: '0 auto',
-        padding: '48px 32px 72px',
-        display: 'grid',
-        gridTemplateColumns: '1.05fr 1fr',
+        paddingTop: 48,
+        paddingBottom: 72,
         gap: 56,
         alignItems: 'center',
       }}>
         <div>
-          <h1 style={{
-            margin: 0, fontSize: 52, lineHeight: 1.05,
+          <h1 className="text-[36px] sm:text-[52px]" style={{
+            margin: 0, lineHeight: 1.05,
             fontWeight: 500, letterSpacing: '-0.035em',
             textWrap: 'balance',
           } as React.CSSProperties}>
@@ -43,7 +42,7 @@ export function LandingScreen({ onCta, onSignIn }: LandingScreenProps) {
             Clients book and check in from their phone. You see every booking,
             approve walk-ins, and send delay updates without leaving the queue.
           </p>
-          <div style={{ display: 'flex', gap: 10, marginTop: 28, alignItems: 'center' }}>
+          <div className="flex-col sm:flex-row" style={{ display: 'flex', gap: 10, marginTop: 28, alignItems: 'stretch' }}>
             <Button variant="primary" size="lg" onClick={onCta} iconRight="arrowR">Create an account</Button>
             <Button variant="ghost" size="lg" onClick={onSignIn}>Sign in</Button>
           </div>
@@ -52,8 +51,8 @@ export function LandingScreen({ onCta, onSignIn }: LandingScreenProps) {
         <HeroQueuePreview />
       </section>
 
-      <section style={{ maxWidth: 1080, margin: '0 auto', padding: '0 32px 88px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <section className="px-4 sm:px-8" style={{ maxWidth: 1080, margin: '0 auto', paddingBottom: 88 }}>
+        <div className="qf-feature-grid" style={{ gap: 16 }}>
           <FeatureCard
             title="One shareable link per seat"
             body="Each org user gets a portal link or QR. Clients land in the right queue without paperwork."

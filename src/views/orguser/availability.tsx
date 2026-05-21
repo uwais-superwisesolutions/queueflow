@@ -182,7 +182,7 @@ export function AvailabilityView() {
         subtitle="Working hours and exceptions for your week."
         breadcrumb={['Dashboard', 'Availability']}
       />
-      <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
+      <div className="flex-1 overflow-auto qf-scroll qf-page">
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Button
@@ -343,7 +343,7 @@ function RecurringSchedule({ viewMode, anchorDate }: RecurringScheduleProps) {
   return (
     <>
       <Card padding={0}>
-        <div className="px-[18px] py-[14px] border-b border-line flex items-center gap-3">
+        <div className="px-[18px] py-[14px] border-b border-line flex flex-wrap items-center gap-3">
           <Icon name="calendar" size={15} className="text-ink-3" />
           <h2 className="m-0 text-[14px] font-medium">Recurring weekly schedule</h2>
           <Pill tone="neutral">{totalWindows} window{totalWindows === 1 ? '' : 's'}</Pill>
@@ -478,40 +478,41 @@ function WeekGrid({
   const gridTemplateColumns = `56px repeat(${cols}, 1fr)`;
 
   return (
-    <Card padding={0} className="overflow-hidden">
-      <div
-        className="grid border-b border-line bg-surface-2"
-        style={{ gridTemplateColumns }}
-      >
-        <div />
-        {visibleDates.map((date, i) => {
-          const dow = visibleDays[i];
-          const isToday = isSameDay(date, today);
-          return (
-            <div
-              key={date.toISOString()}
-              className="px-3 py-2 border-l border-line flex items-baseline gap-2"
-            >
-              <span className="text-[11.5px] text-ink-3 font-medium">
-                {DAY_NAMES[UI_DAY_ORDER.indexOf(dow)]}
-              </span>
-              <span
-                className={cn(
-                  'tnum text-[14px] font-medium',
-                  isToday ? 'text-teal' : 'text-ink',
-                )}
+    <Card padding={0} className="overflow-x-auto qf-scroll">
+      <div style={{ minWidth: singleDay ? 0 : 760 }}>
+        <div
+          className="grid border-b border-line bg-surface-2"
+          style={{ gridTemplateColumns }}
+        >
+          <div />
+          {visibleDates.map((date, i) => {
+            const dow = visibleDays[i];
+            const isToday = isSameDay(date, today);
+            return (
+              <div
+                key={date.toISOString()}
+                className="px-3 py-2 border-l border-line flex items-baseline gap-2"
               >
-                {date.getDate()}
-              </span>
-              {!dayRows.get(dow)?.length && (
-                <Pill tone="neutral" className="ml-auto" style={{ fontSize: 10 }}>
-                  Off
-                </Pill>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                <span className="text-[11.5px] text-ink-3 font-medium">
+                  {DAY_NAMES[UI_DAY_ORDER.indexOf(dow)]}
+                </span>
+                <span
+                  className={cn(
+                    'tnum text-[14px] font-medium',
+                    isToday ? 'text-teal' : 'text-ink',
+                  )}
+                >
+                  {date.getDate()}
+                </span>
+                {!dayRows.get(dow)?.length && (
+                  <Pill tone="neutral" className="ml-auto" style={{ fontSize: 10 }}>
+                    Off
+                  </Pill>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
       <div className="grid" style={{ gridTemplateColumns }}>
         <div>
@@ -587,6 +588,7 @@ function WeekGrid({
           );
         })}
       </div>
+      </div>
     </Card>
   );
 }
@@ -613,7 +615,8 @@ function MonthGrid({
   }, [rows]);
 
   return (
-    <Card padding={0} className="overflow-hidden">
+    <Card padding={0} className="overflow-x-auto qf-scroll">
+      <div style={{ minWidth: 680 }}>
       <div
         className="grid border-b border-line bg-surface-2"
         style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
@@ -675,6 +678,7 @@ function MonthGrid({
             </div>
           );
         })}
+      </div>
       </div>
     </Card>
   );
@@ -832,7 +836,7 @@ function AddWindowModal({
             })}
           </div>
         </Field>
-        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="qf-two-col gap-3">
           <Field label="From">
             <SelectInput
               value={startTime}
@@ -1004,7 +1008,7 @@ function Exceptions() {
 
   return (
     <Card padding={0}>
-      <div className="px-[18px] py-[14px] border-b border-line flex items-center gap-3">
+      <div className="px-[18px] py-[14px] border-b border-line flex flex-wrap items-center gap-3">
         <Icon name="calendar" size={15} className="text-ink-3" />
         <h2 className="m-0 text-[14px] font-medium">Upcoming exceptions</h2>
         <Pill tone="neutral">{items.length} active</Pill>
@@ -1031,7 +1035,7 @@ function Exceptions() {
             <div
               key={e.id}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5',
+                'flex flex-col sm:flex-row sm:items-center gap-3 px-3 py-2.5',
                 i < items.length - 1 && 'border-b border-line',
               )}
             >
@@ -1180,7 +1184,7 @@ function ExceptionModal({
           />
         </Field>
         {type !== 'blocked' && (
-          <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div className="qf-two-col gap-3">
             <Field label="From">
               <input
                 type="time"

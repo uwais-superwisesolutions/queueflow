@@ -269,7 +269,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
           subtitle="Loading your shift…"
           breadcrumb={[orgName ?? 'Org', 'My queue']}
         />
-        <div className="flex-1 overflow-auto qf-scroll p-6">
+        <div className="flex-1 overflow-auto qf-scroll qf-page">
           <QueueSkeleton />
         </div>
       </div>
@@ -280,7 +280,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
     return (
       <div className="flex-1 flex flex-col">
         <TopBar title="Live queue" subtitle="No active shift" />
-        <div className="flex-1 overflow-auto qf-scroll p-6">
+        <div className="flex-1 overflow-auto qf-scroll qf-page">
           <Card padding={28} className="max-w-[520px] mx-auto text-center">
             <span className="inline-flex w-12 h-12 rounded-[12px] bg-surface-2 items-center justify-center text-ink-3">
               <Icon name="chair" size={20} />
@@ -300,7 +300,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
 
   return (
     <div className="flex-1 flex flex-col bg-bg" style={{ minHeight: 0 }}>
-      <header className="px-6 py-3.5 border-b border-line bg-surface flex items-center gap-4">
+      <header className="px-4 sm:px-6 py-3.5 border-b border-line bg-surface flex flex-wrap items-center gap-3 sm:gap-4">
         <span className="w-9 h-9 rounded-[10px] bg-teal-tint text-teal-ink inline-flex items-center justify-center flex-none">
           <Icon name="chair" size={16} />
         </span>
@@ -311,7 +311,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
             {fmtTime(assignment.startedAt)}
           </div>
         </div>
-        <span className="flex items-center gap-1.5 text-[12px] text-ink-3 flex-none">
+        <span className="flex items-center gap-1.5 text-[12px] text-ink-3 flex-none order-3 sm:order-none">
           <span className="qf-live-dot" />
           {updatedAt ? `Updated ${agoLabel(Date.now() - updatedAt)}` : 'Live'}
         </span>
@@ -323,7 +323,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
         >
           {endingShift ? 'Ending…' : 'End shift'}
         </Button>
-        <div style={{ width: 220 }}>
+        <div className="hidden md:block w-[220px]">
           <ProfileMenu
             fullName={fullName ?? ''}
             email={email}
@@ -354,7 +354,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
 
       {(error || actionError) && (
         <div
-          className="mx-6 mt-4 flex items-center gap-[10px] px-3.5 py-[10px] rounded-[10px] border"
+          className="mx-4 sm:mx-6 mt-4 flex items-center gap-[10px] px-3.5 py-[10px] rounded-[10px] border"
           style={{
             background: 'var(--coral-tint)',
             borderColor: 'color-mix(in oklab, var(--coral) 30%, transparent)',
@@ -375,13 +375,13 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
         </div>
       )}
 
-      <main className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 32px' }}>
-        <div className="flex items-center gap-3 mb-4">
+      <main className="flex-1 overflow-auto qf-scroll qf-page-tight">
+        <div className="flex flex-wrap items-center gap-3 mb-4">
           <h1 className="m-0 text-[20px] font-medium tracking-[-0.02em]">My queue</h1>
           <Pill tone="neutral">{totalInQueue} active</Pill>
         </div>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 320px', alignItems: 'start' }}>
+        <div className="qf-main-grid gap-4">
           <div className="flex flex-col gap-4">
             <QueueSection
               title="Pending approval"
@@ -508,7 +508,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
             </QueueSection>
           </div>
 
-          <aside className="flex flex-col gap-3.5" style={{ position: 'sticky', top: 16 }}>
+          <aside className="qf-sticky-aside flex flex-col gap-3.5" style={{ position: 'sticky', top: 16 }}>
             <NotificationPanel />
             <AtGlancePanel />
           </aside>
@@ -557,7 +557,7 @@ function QueueSection({
 }) {
   return (
     <Card padding={0}>
-      <div className="px-4 py-3 border-b border-line flex items-center gap-2.5 relative">
+      <div className="px-4 py-3 border-b border-line flex flex-wrap items-center gap-2.5 relative">
         <span
           className="absolute left-0 top-[10px] bottom-[10px] w-[3px]"
           style={{ background: SECTION_ACCENT[accent] }}
@@ -599,7 +599,7 @@ function PendingCard({
     : 0;
   const label = clientLabel(booking);
   return (
-    <div className="px-4 py-3 border-b border-line last:border-b-0 flex items-center gap-3">
+    <div className="px-4 py-3 border-b border-line last:border-b-0 flex flex-col sm:flex-row sm:items-center gap-3">
       <Avatar name={label} size={36} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -637,7 +637,7 @@ function PendingCard({
           <div className="text-[10px] text-ink-4 uppercase tracking-wide">Before expires</div>
         </div>
       )}
-      <div className="flex gap-1.5 flex-none">
+      <div className="flex gap-1.5 flex-none self-stretch sm:self-auto [&>button]:flex-1 sm:[&>button]:flex-none">
         <Button variant="ghost" size="sm" icon="x" onClick={onReject} disabled={disabled}>
           Reject
         </Button>
@@ -675,7 +675,7 @@ function InServiceCard({
 
   return (
     <div
-      className="px-4 py-4 flex items-center gap-4 flex-wrap"
+      className="px-4 py-4 flex flex-col sm:flex-row sm:items-center gap-4"
       style={{ background: 'var(--blue-tint, #f0f5ff)' }}
     >
       <Avatar name={label} size={44} active />
@@ -716,7 +716,7 @@ function InServiceCard({
         </div>
       </div>
       <div
-        className="rounded-[12px] border border-line bg-surface px-4 py-3 text-center flex-none"
+        className="rounded-[12px] border border-line bg-surface px-4 py-3 text-center flex-none w-full sm:w-auto"
         style={{ minWidth: 96 }}
       >
         <div className="text-[9px] text-ink-4 uppercase tracking-[0.07em] font-semibold mb-1">
@@ -764,7 +764,7 @@ function BookingRow({
   return (
     <div
       className={cn(
-        'px-4 py-3 border-b border-line last:border-b-0 flex items-center gap-3',
+        'px-4 py-3 border-b border-line last:border-b-0 flex flex-col sm:flex-row sm:items-center gap-3',
         disabled && 'opacity-60',
       )}
       style={
@@ -822,7 +822,7 @@ function BookingRow({
           {waitingLabel}
         </span>
       )}
-      <div className="flex gap-1.5 flex-none">{actions}</div>
+      <div className="flex gap-1.5 flex-none self-stretch sm:self-auto justify-end">{actions}</div>
     </div>
   );
 }
@@ -1000,7 +1000,7 @@ function AtGlancePanel() {
       <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold">
         Today at a glance
       </div>
-      <div className="grid gap-3 mt-2.5" style={{ gridTemplateColumns: '1fr 1fr' }}>
+      <div className="grid grid-cols-2 gap-3 mt-2.5">
         <MiniStat label="Completed" value="6" tone="success" />
         <MiniStat label="No-shows" value="1" tone="ink" />
         <MiniStat label="Avg consult" value="22m" tone="ink" />

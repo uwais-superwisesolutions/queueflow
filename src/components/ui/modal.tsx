@@ -15,13 +15,13 @@ export function Modal({ open, onClose, title, children, footer, width = 480 }: M
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-5"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-3 sm:p-5"
       style={{ background: 'rgba(20,18,12,.34)', backdropFilter: 'blur(2px)' }}
     >
       <div
         onClick={e => e.stopPropagation()}
         className="bg-surface border border-line rounded-[14px] shadow-lg flex flex-col overflow-hidden"
-        style={{ width, maxWidth: '100%', maxHeight: 'calc(100vh - 40px)' }}
+        style={{ width, maxWidth: '100%', maxHeight: 'calc(100vh - 24px)' }}
       >
         <div className="flex items-center gap-3 px-[18px] py-[14px] border-b border-line">
           <h2 className="m-0 text-[15px] font-semibold flex-1 tracking-[-0.01em]">{title}</h2>
@@ -35,7 +35,7 @@ export function Modal({ open, onClose, title, children, footer, width = 480 }: M
         </div>
         <div className="p-[18px] overflow-auto flex-1 qf-scroll">{children}</div>
         {footer && (
-          <div className="flex gap-2 justify-end px-[18px] py-3 border-t border-line">
+          <div className="flex gap-2 justify-end flex-wrap px-[18px] py-3 border-t border-line">
             {footer}
           </div>
         )}

@@ -187,18 +187,18 @@ export function OrgUsersView() {
           </Button>
         }
       />
-      <div className="flex-1 overflow-auto px-6 pt-4 pb-10 qf-scroll">
+      <div className="flex-1 overflow-auto qf-page qf-scroll">
         <SectionError message={error} />
 
-        <div className="flex items-center gap-3 mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
           <Tabs value={tab} onChange={(id) => setTab(id as OrgTab)} items={tabItems} />
-          <span className="flex-1" />
+          <span className="hidden sm:block flex-1" />
           <TextInput
             icon="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name or email"
-            wrapClassName="w-[240px]"
+            wrapClassName="w-full sm:w-[240px]"
           />
           <Button variant="ghost" size="sm" icon="refresh" onClick={reload} disabled={loading}>
             Refresh

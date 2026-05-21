@@ -203,14 +203,14 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
 
   return (
     <div className="bg-bg flex flex-col" style={{ minHeight: '100vh' }}>
-      <header className="px-8 py-5 border-b border-line bg-surface flex items-center gap-6">
+      <header className="px-4 sm:px-8 py-4 sm:py-5 border-b border-line bg-surface flex flex-wrap items-center gap-4 sm:gap-6">
         <QFLogo size={18} />
         <span className="text-[12px] text-ink-3">{orgDisplayName}</span>
-        <ProgressBar step={step} total={WIZ_STEPS.length} className="flex-1 max-w-[520px] mx-auto" />
+        <ProgressBar step={step} total={WIZ_STEPS.length} className="hidden md:flex flex-1 max-w-[520px] mx-auto" />
         <Button variant="ghost" size="sm" onClick={onExit}>Save &amp; exit</Button>
       </header>
 
-      <main className="flex-1 flex justify-center overflow-auto" style={{ padding: '40px 32px 100px' }}>
+      <main className="flex-1 flex justify-center overflow-auto px-4 sm:px-8 py-8 sm:py-10 pb-[100px]">
         <div className="w-full max-w-[720px]">
           <div className="mb-6">
             <div className="mono text-[11.5px] text-ink-4" style={{ letterSpacing: '0.06em' }}>
@@ -231,7 +231,7 @@ export function OnboardingScreen({ initialStep = 0, onFinish, onExit }: Onboardi
         </div>
       </main>
 
-      <footer className="sticky bottom-0 bg-surface border-t border-line px-8 py-[14px] flex items-center gap-3">
+      <footer className="sticky bottom-0 bg-surface border-t border-line px-4 sm:px-8 py-[14px] flex flex-wrap items-center gap-3">
         <div className="flex gap-1">
           {WIZ_STEPS.map((s, i) => (
             <span
@@ -746,7 +746,7 @@ function InvitesStep({ saveRef, onError }: StepProps) {
   return (
     <Card padding={0}>
       <div
-        className="grid px-4 py-2.5 border-b border-line bg-surface-2 text-[11.5px] text-ink-3 font-medium uppercase"
+        className="hidden md:grid px-4 py-2.5 border-b border-line bg-surface-2 text-[11.5px] text-ink-3 font-medium uppercase"
         style={{ gridTemplateColumns: INVITE_GRID, letterSpacing: '0.05em' }}
       >
         <span>Email</span>
@@ -760,46 +760,59 @@ function InvitesStep({ saveRef, onError }: StepProps) {
           <div
             key={inv.id}
             className={cn(
-              'grid px-4 py-2.5 items-center gap-2.5',
+              'flex flex-col md:grid px-4 py-3 md:py-2.5 items-stretch md:items-center gap-3 md:gap-2.5',
               i < rows.length - 1 && 'border-b border-line',
             )}
             style={{ gridTemplateColumns: INVITE_GRID }}
           >
-            <TextInput
-              value={inv.email}
-              onChange={(e) => update(inv.id, 'email', e.target.value)}
-              placeholder="name@clinic.com"
-              wrapClassName="min-w-0"
-              disabled={inv.isExisting}
-            />
-            <SelectInput
-              value={inv.role}
-              onChange={(e) => update(inv.id, 'role', e.target.value as InviteRole)}
-              options={roleOptions}
-              wrapClassName="min-w-0"
-              disabled={inv.isExisting}
-            />
-            <SelectInput
-              value={inv.preferredSeat}
-              onChange={(e) => update(inv.id, 'preferredSeat', e.target.value)}
-              options={seatOptions}
-              wrapClassName="min-w-0"
-              disabled={inv.isExisting}
-            />
-            <Pill tone={inv.isExisting ? (inv.accepted ? 'success' : 'amber') : 'neutral'}>
-              {inv.isExisting ? (inv.accepted ? 'Accepted' : 'Sent') : 'New'}
-            </Pill>
+            <div className="min-w-0">
+              <div className="md:hidden text-[12px] text-ink-3 font-medium mb-1.5">Email</div>
+              <TextInput
+                value={inv.email}
+                onChange={(e) => update(inv.id, 'email', e.target.value)}
+                placeholder="name@clinic.com"
+                wrapClassName="min-w-0 w-full"
+                disabled={inv.isExisting}
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="md:hidden text-[12px] text-ink-3 font-medium mb-1.5">Role</div>
+              <SelectInput
+                value={inv.role}
+                onChange={(e) => update(inv.id, 'role', e.target.value as InviteRole)}
+                options={roleOptions}
+                wrapClassName="min-w-0 w-full"
+                disabled={inv.isExisting}
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="md:hidden text-[12px] text-ink-3 font-medium mb-1.5">Assigned seat</div>
+              <SelectInput
+                value={inv.preferredSeat}
+                onChange={(e) => update(inv.id, 'preferredSeat', e.target.value)}
+                options={seatOptions}
+                wrapClassName="min-w-0 w-full"
+                disabled={inv.isExisting}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="md:hidden text-[12px] text-ink-3 font-medium">Status</span>
+              <Pill tone={inv.isExisting ? (inv.accepted ? 'success' : 'amber') : 'neutral'}>
+                {inv.isExisting ? (inv.accepted ? 'Accepted' : 'Sent') : 'New'}
+              </Pill>
+            </div>
             <button
               onClick={() => remove(inv.id)}
               disabled={inv.isExisting}
-              className="border-0 bg-transparent cursor-pointer text-ink-3 p-1.5 rounded-[6px] hover:bg-surface-2 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="border-0 bg-transparent cursor-pointer text-ink-3 p-1.5 rounded-[6px] hover:bg-surface-2 disabled:opacity-30 disabled:cursor-not-allowed self-end md:self-auto"
+              aria-label="Remove invite"
             >
               <Icon name="trash" size={14} />
             </button>
           </div>
         ))}
       </div>
-      <div className="p-3 border-t border-line bg-surface-2 flex items-center gap-2">
+      <div className="p-3 border-t border-line bg-surface-2 flex flex-wrap items-center gap-2">
         <Button variant="ghost" icon="plus" onClick={add}>Add another</Button>
         <span className="flex-1" />
         <span className="text-[12px] text-ink-3">
@@ -932,55 +945,68 @@ function TimeslotsStep({ saveRef, onError }: StepProps) {
             <div
               key={t.id}
               className={cn(
-                'grid items-center gap-2.5 p-2.5',
+                'flex flex-col md:grid items-stretch md:items-center gap-3 md:gap-2.5 p-3 md:p-2.5',
                 i < rows.length - 1 && 'border-b border-line',
               )}
               style={{ gridTemplateColumns: 'auto minmax(0, 2fr) minmax(0, 1fr) auto auto' }}
             >
-              <div
-                className="inline-flex items-center justify-center text-white rounded-[8px] flex-none"
-                style={{ width: 30, height: 30, background: colorObj.bg }}
-              >
-                <Icon name="clock" size={14} />
+              <div className="flex items-center gap-2">
+                <div
+                  className="inline-flex items-center justify-center text-white rounded-[8px] flex-none"
+                  style={{ width: 30, height: 30, background: colorObj.bg }}
+                >
+                  <Icon name="clock" size={14} />
+                </div>
+                <span className="md:hidden text-[12px] text-ink-3 font-medium">Service</span>
               </div>
-              <TextInput
-                value={t.name}
-                onChange={(e) => update(t.id, 'name', e.target.value)}
-                placeholder="Service name (e.g. Consult)"
-                wrapClassName="min-w-0"
-              />
-              <div className="flex items-center gap-2 bg-surface border border-line-2 rounded-[8px] px-2.5 h-[38px] min-w-0">
-                <input
-                  type="number"
-                  min={1}
-                  value={t.durationMinutes}
-                  onChange={(e) => update(t.id, 'durationMinutes', Math.max(1, Number(e.target.value) || 0))}
-                  className="flex-1 h-full border-0 bg-transparent font-[inherit] text-ink outline-none w-10 min-w-0"
+              <div className="min-w-0">
+                <div className="md:hidden text-[12px] text-ink-3 font-medium mb-1.5">Service name</div>
+                <TextInput
+                  value={t.name}
+                  onChange={(e) => update(t.id, 'name', e.target.value)}
+                  placeholder="Service name (e.g. Consult)"
+                  wrapClassName="min-w-0 w-full"
                 />
-                <span className="text-[12px] text-ink-3">min</span>
               </div>
-              <div className="flex gap-1.5">
-                {TIMESLOT_COLORS.map((c) => (
-                  <button
-                    key={c.v}
-                    onClick={() => update(t.id, 'color', c.v)}
-                    aria-label={c.v}
-                    className="border-0 cursor-pointer rounded-[6px]"
-                    style={{
-                      width: 22,
-                      height: 22,
-                      background: c.bg,
-                      boxShadow:
-                        t.color === c.v
-                          ? '0 0 0 2px var(--surface), 0 0 0 4px var(--ink)'
-                          : 'inset 0 0 0 1px rgba(20,18,12,.06)',
-                    }}
+              <div className="min-w-0">
+                <div className="md:hidden text-[12px] text-ink-3 font-medium mb-1.5">Duration</div>
+                <div className="flex items-center gap-2 bg-surface border border-line-2 rounded-[8px] px-2.5 h-[38px] min-w-0">
+                  <input
+                    type="number"
+                    min={1}
+                    value={t.durationMinutes}
+                    onChange={(e) => update(t.id, 'durationMinutes', Math.max(1, Number(e.target.value) || 0))}
+                    className="flex-1 h-full border-0 bg-transparent font-[inherit] text-ink outline-none w-10 min-w-0"
                   />
-                ))}
+                  <span className="text-[12px] text-ink-3">min</span>
+                </div>
+              </div>
+              <div>
+                <div className="md:hidden text-[12px] text-ink-3 font-medium mb-1.5">Color</div>
+                <div className="flex flex-wrap gap-2 md:gap-1.5">
+                  {TIMESLOT_COLORS.map((c) => (
+                    <button
+                      key={c.v}
+                      onClick={() => update(t.id, 'color', c.v)}
+                      aria-label={c.v}
+                      className="border-0 cursor-pointer rounded-[6px]"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        background: c.bg,
+                        boxShadow:
+                          t.color === c.v
+                            ? '0 0 0 2px var(--surface), 0 0 0 4px var(--ink)'
+                            : 'inset 0 0 0 1px rgba(20,18,12,.06)',
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
               <button
                 onClick={() => remove(t.id)}
-                className="border-0 bg-transparent cursor-pointer text-ink-3 p-1.5 rounded-[6px] hover:bg-surface-2"
+                className="border-0 bg-transparent cursor-pointer text-ink-3 p-1.5 rounded-[6px] hover:bg-surface-2 self-end md:self-auto"
+                aria-label="Remove timeslot type"
               >
                 <Icon name="trash" size={14} />
               </button>
@@ -998,4 +1024,3 @@ function TimeslotsStep({ saveRef, onError }: StepProps) {
 function emptyTimeslotRow(): TimeslotRow {
   return { id: nextLocalId(), name: '', durationMinutes: 30, color: 'teal' };
 }
-

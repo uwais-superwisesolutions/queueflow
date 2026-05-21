@@ -18,7 +18,7 @@ export function SettingsView() {
   return (
     <>
       <TopBar title="Settings" subtitle="Organization-level configuration." />
-      <div className="flex-1 overflow-auto px-6 pt-4 pb-10 qf-scroll" style={{ maxWidth: 880 }}>
+      <div className="flex-1 overflow-auto qf-page qf-scroll max-w-[880px]">
         <BrandingSection />
         <div className="h-5" />
         <PublicHolidaysSection />
@@ -82,7 +82,7 @@ function BrandingSection() {
 
   return (
     <Card padding={0}>
-      <div className="px-[18px] py-[14px] border-b border-line flex items-center gap-3">
+      <div className="px-[18px] py-[14px] border-b border-line flex flex-wrap items-center gap-3">
         <h2 className="m-0 text-[14px] font-medium">Branding</h2>
         <span className="text-[12px] text-ink-3">How your organisation appears in QueueFlow.</span>
       </div>
@@ -92,7 +92,7 @@ function BrandingSection() {
           <FormSkeleton rows={4} />
         ) : (
           <>
-            <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <div className="qf-two-col gap-4">
               <Field label="Organisation name" hint="Set during signup. Contact support to change.">
                 <TextInput value={org?.name ?? ''} disabled />
               </Field>
@@ -113,22 +113,30 @@ function BrandingSection() {
               />
             </Field>
             <div className="h-3" />
-            <Field label="Brand color" hint="A hex value like #0F6E56. Used as accent in client portal.">
-              <div className="flex items-center gap-2.5">
+            <Field label="Brand color" hint="Pick a color or paste a hex value like #0F6E56. Used as accent in client portal.">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <TextInput
                   value={brandColor}
                   onChange={(e) => setBrandColor(e.target.value)}
                   placeholder="#0F6E56"
                   wrapClassName="flex-1"
                 />
-                <span
-                  className="w-9 h-9 rounded-[8px] flex-none border border-line"
+                <label
+                  className="w-9 h-9 rounded-[8px] flex-none border border-line cursor-pointer relative overflow-hidden"
                   style={{ background: brandColor || 'var(--surface-2)' }}
-                  aria-label="Color preview"
-                />
+                  aria-label="Pick brand color"
+                  title="Pick a color"
+                >
+                  <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(brandColor) ? brandColor : '#0f6e56'}
+                    onChange={(e) => setBrandColor(e.target.value.toUpperCase())}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer border-0 p-0 m-0"
+                  />
+                </label>
               </div>
             </Field>
-            <div className="flex items-center mt-4 gap-3">
+            <div className="flex flex-wrap items-center mt-4 gap-3">
               {saved && (
                 <span className="text-[12.5px] text-success inline-flex items-center gap-1.5">
                   <Icon name="check" size={12} /> Saved
@@ -195,7 +203,7 @@ function PublicHolidaysSection() {
 
   return (
     <Card padding={0}>
-      <div className="px-[18px] py-[14px] border-b border-line flex items-center gap-3">
+      <div className="px-[18px] py-[14px] border-b border-line flex flex-wrap items-center gap-3">
         <h2 className="m-0 text-[14px] font-medium">Public holidays</h2>
         <span className="text-[12px] text-ink-3">
           Days when nobody in {`the org`} is available. Overrides individual availability.
