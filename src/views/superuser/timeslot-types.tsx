@@ -146,7 +146,7 @@ export function TimeslotsView() {
           </Button>
         }
       />
-      <div className="flex-1 overflow-auto px-6 pt-4 pb-10 qf-scroll">
+      <div className="flex-1 overflow-auto qf-page qf-scroll">
         <SectionError message={error} />
         <Card style={{ padding: 0 }}>
           {loading && items.length === 0 ? (
@@ -286,7 +286,7 @@ function TimeslotModal({
           </div>
         </Field>
         <Field label="Color" hint="Used for at-a-glance recognition in the queue.">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {COLOR_SWATCHES.map((c) => (
               <button
                 key={c.v}

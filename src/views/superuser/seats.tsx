@@ -103,7 +103,7 @@ export function SeatsView() {
         title="Seats & departments"
         subtitle="Manage your physical and logical resources."
         right={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
               icon="plus"
@@ -123,11 +123,11 @@ export function SeatsView() {
         }
       />
 
-      <div className="flex-1 overflow-hidden px-6 pt-4 pb-6 flex gap-[18px] min-h-0">
+      <div className="flex-1 overflow-auto lg:overflow-hidden qf-page-tight flex flex-col lg:flex-row gap-[18px] min-h-0">
         <Card
+          className="w-full lg:w-[260px] lg:flex-none"
           style={{
             padding: 0,
-            width: 260,
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
@@ -140,7 +140,7 @@ export function SeatsView() {
               {departments.length}
             </Pill>
           </div>
-          <div className="p-1 overflow-auto qf-scroll">
+          <div className="p-1 overflow-auto qf-scroll max-h-[220px] lg:max-h-none">
             {loading && departments.length === 0 ? (
               <div className="p-1">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -200,7 +200,7 @@ export function SeatsView() {
           </div>
         </Card>
 
-        <div className="flex-1 min-w-0 overflow-auto qf-scroll">
+        <div className="flex-1 min-w-0 overflow-visible lg:overflow-auto qf-scroll">
           <SectionError message={error} />
 
           {loading && !activeDept ? (
@@ -219,7 +219,7 @@ export function SeatsView() {
             />
           ) : (
             <>
-              <div className="flex items-center mb-3 gap-[10px]">
+              <div className="flex flex-wrap items-center mb-3 gap-[10px]">
                 <h2 className="m-0 text-[16px] font-medium tracking-[-0.01em]">{activeDept.name}</h2>
                 <Pill tone="neutral">
                   {activeSeats.length} seat{activeSeats.length === 1 ? '' : 's'}
@@ -259,10 +259,7 @@ export function SeatsView() {
                   }
                 />
               ) : (
-                <div
-                  className="grid gap-3"
-                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
-                >
+                <div className="qf-card-grid gap-3">
                   {activeSeats.map((s) => (
                     <Card key={s.id} hover style={{ padding: 14 }}>
                       <div className="flex items-center gap-[10px]">

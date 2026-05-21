@@ -162,7 +162,7 @@ export function AnalyticsView() {
         title="Analytics"
         subtitle="The last 30 days"
         right={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <SelectInput
               defaultValue="Last 30 days"
               options={['Today', 'Last 7 days', 'Last 30 days', 'Last 90 days', 'This year']}
@@ -171,8 +171,8 @@ export function AnalyticsView() {
           </div>
         }
       />
-      <div className="flex-1 overflow-auto px-6 pt-4 pb-10 qf-scroll">
-        <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="flex-1 overflow-auto qf-page qf-scroll">
+        <div className="qf-kpi-grid gap-3 mb-4">
           <Kpi label="Bookings" value="2,831" sub="+18% vs prev" hint="30d" />
           <Kpi label="Avg wait" value="24" sub="min" hint="30d" />
           <Kpi label="Seat utilization" value="62" sub="%" hint="avg across seats" />
@@ -180,7 +180,7 @@ export function AnalyticsView() {
         </div>
 
         <Card style={{ padding: 18, marginBottom: 16 }}>
-          <div className="flex items-baseline gap-[10px] mb-[14px]">
+          <div className="flex flex-wrap items-baseline gap-[10px] mb-[14px]">
             <h3 className="m-0 text-[14px] font-semibold tracking-[-0.005em]">Bookings per day</h3>
             <span className="text-[12px] text-ink-3">Last 30 days</span>
             <span className="flex-1" />
@@ -194,7 +194,7 @@ export function AnalyticsView() {
           <LineChart data={BOOKINGS_30D} height={180} />
         </Card>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: '1.1fr 1.4fr' }}>
+        <div className="qf-analytics-grid gap-4">
           <Card style={{ padding: 18 }}>
             <h3 className="m-0 mb-[14px] text-[14px] font-semibold">Avg wait by department</h3>
             <div className="flex flex-col gap-3">
@@ -211,7 +211,7 @@ export function AnalyticsView() {
           </Card>
 
           <Card style={{ padding: 0 }}>
-            <div className="px-[18px] py-[14px] border-b border-line flex items-center gap-[10px]">
+            <div className="px-[18px] py-[14px] border-b border-line flex flex-wrap items-center gap-[10px]">
               <h3 className="m-0 text-[14px] font-semibold">Seat utilization</h3>
               <span className="text-[12px] text-ink-3">% of available hours with an active session</span>
             </div>

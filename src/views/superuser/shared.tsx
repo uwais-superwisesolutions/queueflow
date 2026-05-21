@@ -22,7 +22,7 @@ export function Tabs({
   items: TabItem[];
 }) {
   return (
-    <div className="flex gap-[2px] bg-surface-2 p-[3px] rounded-[8px] border border-line">
+    <div className="flex gap-[2px] bg-surface-2 p-[3px] rounded-[8px] border border-line overflow-x-auto qf-scroll">
       {items.map((it) => {
         const sel = value === it.id;
         return (
@@ -75,13 +75,13 @@ export function DataGrid({ columns, rows }: { columns: DataGridColumn[]; rows: D
     <div>
       <div
         style={{ display: 'grid', gridTemplateColumns: gridTemplate }}
-        className="px-4 py-[10px] border-b border-line bg-surface-2 text-[11px] text-ink-3 font-semibold uppercase tracking-[0.05em]"
+        className="hidden md:grid px-4 py-[10px] border-b border-line bg-surface-2 text-[11px] text-ink-3 font-semibold uppercase tracking-[0.05em]"
       >
         {columns.map((c) => (
           <div key={c.key}>{c.label}</div>
         ))}
       </div>
-      <div>
+      <div className="hidden md:block">
         {rows.map((r, i) => (
           <div
             key={r.key}
@@ -96,6 +96,35 @@ export function DataGrid({ columns, rows }: { columns: DataGridColumn[]; rows: D
                 {r[c.key] as ReactNode}
               </div>
             ))}
+          </div>
+        ))}
+      </div>
+      <div className="md:hidden divide-y divide-line">
+        {rows.map((r) => (
+          <div key={r.key} className="px-4 py-3">
+            {columns.map((c) => {
+              const value = r[c.key] as ReactNode;
+              if (!value) return null;
+              if (!c.label) {
+                return (
+                  <div key={c.key} className="mt-2 flex justify-end">
+                    {value}
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={c.key}
+                  className="grid gap-3 py-1.5 min-w-0"
+                  style={{ gridTemplateColumns: '96px minmax(0, 1fr)' }}
+                >
+                  <div className="text-[11px] text-ink-4 font-semibold uppercase tracking-[0.05em]">
+                    {c.label}
+                  </div>
+                  <div className="min-w-0 text-[12.5px]">{value}</div>
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -188,13 +217,13 @@ export function TableSkeleton({
     <div>
       <div
         style={{ display: 'grid', gridTemplateColumns: gridTemplate }}
-        className="px-4 py-[10px] border-b border-line bg-surface-2"
+        className="hidden md:grid px-4 py-[10px] border-b border-line bg-surface-2"
       >
         {gridTemplate.split(' ').map((_, i) => (
           <SkeletonLine key={i} w={56} h={9} />
         ))}
       </div>
-      <div>
+      <div className="hidden md:block">
         {Array.from({ length: rows }).map((_, i) => (
           <div
             key={i}
@@ -219,6 +248,15 @@ export function TableSkeleton({
                 )}
               </div>
             ))}
+          </div>
+        ))}
+      </div>
+      <div className="md:hidden divide-y divide-line">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="px-4 py-3">
+            <SkeletonLine w="55%" h={13} />
+            <SkeletonLine w="80%" h={11} className="mt-2" />
+            <SkeletonLine w="42%" h={11} className="mt-2" />
           </div>
         ))}
       </div>
@@ -292,10 +330,7 @@ export function ScheduleSkeleton({ rows = 7 }: { rows?: number }) {
 /** Skeleton for the seats card grid (department's seats). */
 export function SeatGridSkeleton({ tiles = 4 }: { tiles?: number }) {
   return (
-    <div
-      className="grid gap-3"
-      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
-    >
+    <div className="qf-card-grid gap-3">
       {Array.from({ length: tiles }).map((_, i) => (
         <div key={i} className="bg-surface border border-line rounded-[12px] p-[14px]">
           <div className="flex items-center gap-[10px]">

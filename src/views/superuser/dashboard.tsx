@@ -151,7 +151,7 @@ export function SuperUserDashboard({
 
   return (
     <div
-      className="flex overflow-hidden"
+      className="flex flex-col md:flex-row overflow-hidden"
       style={{ height: '100vh' }}
     >
       <Sidebar
@@ -172,6 +172,33 @@ export function SuperUserDashboard({
                       label: 'Switch to org user view',
                       icon: 'refresh' as const,
                        onSelect: () => onPersona?.('orguser-claim'),
+                    },
+                  ]
+                : []),
+              {
+                id: 'logout',
+                label: 'Sign out',
+                icon: 'logout' as const,
+                tone: 'danger' as const,
+                onSelect: handleLogout,
+              },
+            ]}
+          />
+        }
+        mobileFooter={
+          <ProfileMenu
+            fullName={fullName ?? ''}
+            email={email}
+            role={role}
+            direction="down"
+            items={[
+              ...(role === 'super_user'
+                ? [
+                    {
+                      id: 'persona',
+                      label: 'Switch to org user view',
+                      icon: 'refresh' as const,
+                      onSelect: () => onPersona?.('orguser-claim'),
                     },
                   ]
                 : []),
@@ -315,7 +342,7 @@ function QueuesView() {
         title="Queues"
         subtitle="All live queues across your org."
         right={
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             <span className="flex items-center gap-1.5 text-[12px] text-ink-3">
               <span className="qf-live-dot" />
               Live
@@ -325,7 +352,7 @@ function QueuesView() {
           </div>
         }
       />
-      <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
+      <div className="flex-1 overflow-auto qf-scroll qf-page">
         {error && (
           <div
             className="flex items-center gap-[10px] px-3.5 py-[10px] rounded-[10px] border mb-4"
@@ -341,7 +368,7 @@ function QueuesView() {
         )}
 
         {loading ? (
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          <div className="qf-card-grid-wide gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <Card key={i} padding={16}>
                 <SkeletonLine w="50%" h={13} />
@@ -355,7 +382,7 @@ function QueuesView() {
             No active bookings right now.
           </Card>
         ) : (
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          <div className="qf-card-grid-wide gap-3">
             {groups.map((g) => (
               <QueueGroupCard
                 key={g.orgMemberId}
@@ -417,7 +444,7 @@ function QueueGroupCard({ memberName, bookings, seatNameById }: QueueGroupCardPr
           <div
             key={b.id}
             className={cn(
-              'px-4 py-2.5 flex items-center gap-2.5',
+              'px-4 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2.5',
               i < bookings.length - 1 && 'border-b border-line',
             )}
           >
@@ -569,7 +596,7 @@ function DashboardBody({ setActive }: DashboardBodyProps) {
         title="Dashboard"
         subtitle={subtitle}
         right={
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             <span className="flex items-center gap-1.5 text-[12px] text-ink-3">
               <span className="qf-live-dot" />
               Live
@@ -581,7 +608,7 @@ function DashboardBody({ setActive }: DashboardBodyProps) {
           </div>
         }
       />
-      <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '20px 24px 40px' }}>
+      <div className="flex-1 overflow-auto qf-scroll qf-page">
         {error && (
           <div
             className="flex items-center gap-[10px] px-3.5 py-[10px] rounded-[10px] border mb-4"
@@ -596,9 +623,9 @@ function DashboardBody({ setActive }: DashboardBodyProps) {
           </div>
         )}
 
-        <div className="grid items-start gap-5" style={{ gridTemplateColumns: '1fr 320px' }}>
+        <div className="qf-main-grid gap-5">
           <div className="flex flex-col gap-5">
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+            <div className="qf-kpi-grid gap-3">
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <Card key={i} padding={14}>
@@ -652,10 +679,7 @@ function DashboardBody({ setActive }: DashboardBodyProps) {
                   Updated {agoLabel(Date.now() - updatedAt)}
                 </span>
               </div>
-              <div
-                className="grid gap-3"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}
-              >
+              <div className="qf-card-grid gap-3">
                 {loading ? (
                   Array.from({ length: 6 }).map((_, i) => <SeatCardSkeleton key={i} />)
                 ) : tiles.length === 0 ? (
@@ -678,7 +702,7 @@ function DashboardBody({ setActive }: DashboardBodyProps) {
             </section>
           </div>
 
-          <aside className="flex flex-col gap-3.5" style={{ position: 'sticky', top: 20 }}>
+          <aside className="qf-sticky-aside flex flex-col gap-3.5" style={{ position: 'sticky', top: 20 }}>
             <Card padding={0}>
               <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
                 <span className="qf-live-dot" />

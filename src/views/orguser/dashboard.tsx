@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Card, Icon, Button, Pill, Field, TextInput } from '@/components/ui'
-import { TopBar } from '@/components/layout'
+import { ProfileMenu, TopBar } from '@/components/layout'
 import { listMyTimeslotTypes, listTimeslotTypes, optInTimeslotType, optOutTimeslotType } from '@/services/timeslotTypeApi'
 import { listNotifications } from '@/services/notificationApi'
 import { updateMyProfile } from '@/services/meApi'
@@ -14,6 +14,7 @@ import { describeNotification } from '@/lib/notification-display'
 import { usePolling } from '@/hooks/use-polling'
 import type { NotificationResponse, TimeslotTypeResponse } from '@/types'
 import { useAuthStore } from '@/stores/authStore'
+import { useClientAuthStore } from '@/stores/clientAuthStore'
 import { OrgUserQueueScreen } from './live-queue'
 import { AvailabilityView } from './availability'
 import type { SidebarNavItem } from '@/types'
@@ -37,6 +38,11 @@ const ORG_NAV: SidebarNavItem[] = [
 
 export function OrgUserDashboard({ initialPage = 'queue', onSignOut, onClaimSeat, onPersona }: OrgUserDashboardProps) {
   const orgName = useAuthStore((s) => s.organisationName)
+  const fullName = useAuthStore((s) => s.fullName)
+  const email = useAuthStore((s) => s.email)
+  const role = useAuthStore((s) => s.role)
+  const clearAuth = useAuthStore((s) => s.clear)
+  const clearClientAuth = useClientAuthStore((s) => s.clear)
   const [active, setActive] = useState(initialPage)
   const navigate = useNavigate()
 
@@ -51,9 +57,47 @@ export function OrgUserDashboard({ initialPage = 'queue', onSignOut, onClaimSeat
     if (id === 'profile') navigate('/profile')
   }
 
+  const handleSignOut = () => {
+    clearAuth()
+    clearClientAuth()
+    onSignOut?.()
+  }
+
   return (
-    <div className="flex min-h-screen bg-bg">
-      <Sidebar items={navItems} active={active} onSelect={handleSelect} orgName={orgName ?? undefined} />
+    <div className="flex flex-col md:flex-row min-h-screen bg-bg">
+      <Sidebar
+        items={navItems}
+        active={active}
+        onSelect={handleSelect}
+        orgName={orgName ?? undefined}
+        mobileFooter={
+          <ProfileMenu
+            fullName={fullName ?? ''}
+            email={email}
+            role={role}
+            direction="down"
+            items={[
+              ...(role === 'super_user' && onPersona
+                ? [
+                    {
+                      id: 'persona',
+                      label: 'Switch to super user view',
+                      icon: 'refresh' as const,
+                      onSelect: () => onPersona('superuser-dash'),
+                    },
+                  ]
+                : []),
+              {
+                id: 'logout',
+                label: 'Sign out',
+                icon: 'logout' as const,
+                tone: 'danger' as const,
+                onSelect: handleSignOut,
+              },
+            ]}
+          />
+        }
+      />
       <main className="flex-1 min-w-0 flex flex-col">
         {active === 'queue' && (
           <OrgUserQueueScreen
@@ -122,7 +166,7 @@ function TimeConfigView() {
         subtitle="Choose which services you accept for your seat."
         breadcrumb={['Dashboard', 'Enable Services']}
       />
-      <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
+      <div className="flex-1 overflow-auto qf-scroll qf-page">
         <Card padding={0} className="max-w-[720px]">
           {error && (
             <div className="px-4 pt-3 text-[12.5px] text-coral" role="alert">
@@ -143,8 +187,8 @@ function TimeConfigView() {
                   key={t.id}
                   className={
                     i < all.length - 1
-                      ? 'px-4 py-3 border-b border-line flex items-center gap-3'
-                      : 'px-4 py-3 flex items-center gap-3'
+                      ? 'px-4 py-3 border-b border-line flex flex-col sm:flex-row sm:items-center gap-3'
+                      : 'px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3'
                   }
                 >
                   <span
@@ -206,7 +250,7 @@ function NotificationsView() {
   return (
     <>
       <TopBar title="Notifications" />
-      <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
+      <div className="flex-1 overflow-auto qf-scroll qf-page">
         <Card padding={0} className="max-w-[720px]">
           {error && (
             <div className="px-4 py-3 text-[12.5px] text-coral border-b border-line" role="alert">
@@ -311,9 +355,9 @@ function ProfileView() {
   return (
     <>
       <TopBar title="Profile" />
-      <div className="flex-1 overflow-auto qf-scroll" style={{ padding: '16px 24px 40px' }}>
+      <div className="flex-1 overflow-auto qf-scroll qf-page">
         <Card padding={0} className="max-w-[720px]">
-          <div className="px-4 py-4 border-b border-line flex items-center gap-3">
+          <div className="px-4 py-4 border-b border-line flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="w-10 h-10 rounded-[10px] bg-surface-2 flex items-center justify-center">
               <Icon name="user" size={16} />
             </div>
@@ -321,7 +365,7 @@ function ProfileView() {
               <div className="text-[14px] font-medium truncate">{storedFullName ?? 'Org user'}</div>
               <div className="text-[12px] text-ink-3 truncate">{storedEmail ?? '—'}</div>
             </div>
-            <Pill tone="neutral">{role === 'super_user' ? 'Super user' : 'Org user'}</Pill>
+            <Pill tone="neutral" className="self-start sm:self-auto">{role === 'super_user' ? 'Super user' : 'Org user'}</Pill>
           </div>
           <div className="px-4 py-4 flex flex-col gap-3">
             <Field label="Full name">
@@ -344,7 +388,7 @@ function ProfileView() {
                 <Icon name="alert" size={12} /> {error}
               </div>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="primary"
                 onClick={handleSave}

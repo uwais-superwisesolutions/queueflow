@@ -74,7 +74,7 @@ export function SignUpScreen({ onSubmit, onSignIn }: SignUpScreenProps) {
         Set up your organisation and invite your team.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="qf-two-col" style={{ gap: 12 }}>
           <Field label="First name">
             <TextInput value={form.firstName} onChange={set('firstName')} placeholder="First name" />
           </Field>
@@ -88,7 +88,7 @@ export function SignUpScreen({ onSubmit, onSignIn }: SignUpScreenProps) {
         <Field label="Password" hint="At least 10 characters.">
           <TextInput type="password" value={form.password} onChange={set('password')} placeholder="••••••••••" />
         </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="qf-two-col" style={{ gap: 12 }}>
           <Field label="Industry">
             <SelectInput
               value={form.industry}

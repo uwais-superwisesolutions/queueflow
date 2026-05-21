@@ -126,10 +126,10 @@ export function PortalLinksView({ onOpenClientPortal }: PortalLinksViewProps = {
           </Button>
         }
       />
-      <div className="flex-1 overflow-auto px-6 pt-4 pb-10 qf-scroll">
+      <div className="flex-1 overflow-auto qf-page qf-scroll">
         <SectionError message={error} />
         {loading ? (
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          <div className="qf-card-grid-wide gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <Card key={i} style={{ padding: 14, overflow: 'hidden' }}>
                 <div className="flex items-start gap-3">
@@ -163,7 +163,7 @@ export function PortalLinksView({ onOpenClientPortal }: PortalLinksViewProps = {
             }
           />
         ) : (
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          <div className="qf-card-grid-wide gap-3">
             {items.map((l) => (
               <LinkCard
                 key={l.id}
@@ -208,7 +208,7 @@ function LinkCard({
 
   return (
     <Card hover style={{ padding: 14, overflow: 'hidden' }}>
-      <div className="flex items-start gap-3 min-w-0">
+      <div className="flex flex-col sm:flex-row items-start gap-3 min-w-0">
         <QRCode size={72} value={url} />
         <div className="flex-1 min-w-0">
           <div className="text-[13.5px] font-medium truncate">{link.name}</div>
@@ -336,7 +336,7 @@ function CreatePortalLinkModal({
           <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Main entrance QR" autoFocus />
         </Field>
         <Field label="Scope">
-          <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+          <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
             {([
               { id: 'org', label: 'Whole org' },
               { id: 'department', label: 'Department' },
