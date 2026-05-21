@@ -10,8 +10,9 @@ import { updateMyProfile } from '@/services/meApi'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { agoLabel } from '@/lib/time'
 import { POLL_INTERVAL_MS } from '@/lib/realtime-channels'
+import { describeNotification } from '@/lib/notification-display'
 import { usePolling } from '@/hooks/use-polling'
-import type { NotificationResponse, NotificationType, TimeslotTypeResponse } from '@/types'
+import type { NotificationResponse, TimeslotTypeResponse } from '@/types'
 import { useAuthStore } from '@/stores/authStore'
 import { OrgUserQueueScreen } from './live-queue'
 import { AvailabilityView } from './availability'
@@ -261,24 +262,6 @@ function NotificationRow({
       </div>
     </div>
   )
-}
-
-function describeNotification(type: NotificationType): {
-  tone: 'coral' | 'amber' | 'blue'
-  title: string
-} {
-  switch (type) {
-    case 'approved':
-      return { tone: 'blue', title: 'Booking approved' }
-    case 'rejected':
-      return { tone: 'coral', title: 'Booking rejected' }
-    case 'call_next':
-      return { tone: 'amber', title: 'Client called next' }
-    case 'delay_basic':
-      return { tone: 'coral', title: 'Delay alert sent' }
-    default:
-      return { tone: 'blue', title: 'Notification' }
-  }
 }
 
 function ProfileView() {

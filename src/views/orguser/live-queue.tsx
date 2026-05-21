@@ -17,13 +17,15 @@ import { ProfileMenu, TopBar } from '@/components/layout';
 import { useTick } from '@/hooks/use-tick';
 import { usePolling } from '@/hooks/use-polling';
 import { POLL_INTERVAL_MS } from '@/lib/realtime-channels';
-import { formatHMS, formatMS } from '@/lib/time';
+import { agoLabel, formatHMS, formatMS } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { describeNotification } from '@/lib/notification-display';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { useAuthStore } from '@/stores/authStore';
 import { useClientAuthStore } from '@/stores/clientAuthStore';
 import { listSeats } from '@/services/seatApi';
 import { listTimeslotTypes } from '@/services/timeslotTypeApi';
+import { listNotifications } from '@/services/notificationApi';
 import {
   bookingDecision,
   cancelBooking,
@@ -40,6 +42,7 @@ import {
 } from '@/services/sessionApi';
 import type {
   BookingResponse,
+  NotificationResponse,
   QueueResponse,
   SeatAssignmentResponse,
   SeatResponse,
@@ -893,54 +896,89 @@ function QueueSkeleton() {
   );
 }
 
+// Compact notifications panel on the live queue's right rail. Reads from
+// /secure/notifications (org_user-scoped — backend filters to bookings the
+// caller owns) and polls on the same cadence as the full Notifications page
+// so the two surfaces never drift.
+const PANEL_LIMIT = 10;
+
 function NotificationPanel() {
-  const items: { tone: 'coral' | 'amber' | 'blue'; title: string; body: string; time: string }[] = [
-    {
-      tone: 'coral',
-      title: 'Running 12 min behind schedule',
-      body: 'Delay alert sent to 3 clients in your queue.',
-      time: '2m ago',
-    },
-    {
-      tone: 'amber',
-      title: 'New request received',
-      body: 'Requested 15:00 · Consult.',
-      time: '5m ago',
-    },
-    {
-      tone: 'blue',
-      title: 'Client checked in',
-      body: 'Arrived in waiting room.',
-      time: '14m ago',
-    },
-  ];
+  const [items, setItems] = useState<NotificationResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      const res = await listNotifications({ limit: PANEL_LIMIT });
+      setItems(res.data);
+      setError(null);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not load notifications.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  usePolling(load, POLL_INTERVAL_MS.notifications);
 
   return (
     <Card padding={0}>
       <div className="px-4 py-3 border-b border-line flex items-center gap-2">
         <span className="qf-live-dot" />
         <span className="text-[12.5px] font-medium">Notifications</span>
-        <Pill tone="coral" className="ml-auto">2 new</Pill>
+        {items.length > 0 && (
+          <Pill tone="neutral" className="ml-auto">
+            {items.length}
+          </Pill>
+        )}
       </div>
       <div>
-        {items.map((n, i) => (
-          <div
-            key={n.title}
-            className={cn(
-              'px-4 py-2.5 flex gap-2.5',
-              i < items.length - 1 && 'border-b border-line',
-            )}
-          >
-            <FeedKindBadge tone={n.tone} />
-            <div className="flex-1 min-w-0">
-              <div className="text-[12.5px] font-medium">{n.title}</div>
-              <div className="text-[11.5px] text-ink-3 mt-0.5">{n.body}</div>
-              <div className="text-[11px] text-ink-4 mt-1">{n.time}</div>
-            </div>
+        {error ? (
+          <div className="px-4 py-3 text-[12px] text-coral" role="alert">
+            <Icon name="alert" size={12} /> {error}
           </div>
-        ))}
+        ) : loading && items.length === 0 ? (
+          <div className="px-4 py-3 text-[12px] text-ink-3">Loading…</div>
+        ) : items.length === 0 ? (
+          <div className="px-4 py-4 text-[12px] text-ink-3 text-center">
+            No notifications yet.
+          </div>
+        ) : (
+          items.map((n, i) => (
+            <NotificationItem
+              key={n.id}
+              notification={n}
+              divider={i < items.length - 1}
+            />
+          ))
+        )}
       </div>
     </Card>
+  );
+}
+
+function NotificationItem({
+  notification,
+  divider,
+}: {
+  notification: NotificationResponse;
+  divider: boolean;
+}) {
+  const { tone, title } = describeNotification(notification.notificationType);
+  const ms = Date.now() - new Date(notification.createdAt).getTime();
+  return (
+    <div className={cn('px-4 py-2.5 flex gap-2.5', divider && 'border-b border-line')}>
+      <FeedKindBadge tone={tone} />
+      <div className="flex-1 min-w-0">
+        <div className="text-[12.5px] font-medium truncate">{title}</div>
+        <div className="text-[11.5px] text-ink-3 mt-0.5 line-clamp-2">{notification.body}</div>
+        <div className="text-[11px] text-ink-4 mt-1">{agoLabel(ms)}</div>
+      </div>
+    </div>
   );
 }
 
