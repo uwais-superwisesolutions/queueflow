@@ -18,11 +18,12 @@ interface LoginScreenProps {
   onClientPortal?: () => void;
 }
 
-export function LoginScreen({ onSubmit, onSignUp, onClientPortal }: LoginScreenProps) {
+export function LoginScreen({ onSubmit, onSignUp }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgotNotice, setForgotNotice] = useState(false);
   const setSession = useAuthStore((s) => s.setSession);
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
 
@@ -57,16 +58,10 @@ export function LoginScreen({ onSubmit, onSignUp, onClientPortal }: LoginScreenP
   return (
     <AuthCard
       footer={
-        <>
-          <div>
-            New here?{' '}
-            <a onClick={onSignUp} className="text-teal-ink cursor-pointer font-medium">Start a free trial</a>
-          </div>
-          <div className="mt-1 text-ink-3">
-            Joining a queue as a client?{' '}
-            <a onClick={onClientPortal} className="text-teal-ink cursor-pointer font-medium">Go to client portal →</a>
-          </div>
-        </>
+        <div>
+          New here?{' '}
+          <a onClick={onSignUp} className="text-teal-ink cursor-pointer font-medium">Create an account</a>
+        </div>
       }
     >
       <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em' }}>Welcome back</h2>
@@ -89,12 +84,20 @@ export function LoginScreen({ onSubmit, onSignUp, onClientPortal }: LoginScreenP
             placeholder="••••••••••"
           />
         </Field>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }} className="text-ink-2">
-            <input type="checkbox" defaultChecked /> Remember me on this device
-          </label>
-          <a style={{ fontSize: 12.5 }} className="text-teal-ink cursor-pointer">Forgot password</a>
+        <div style={{ textAlign: 'right', marginTop: -6 }}>
+          <a
+            onClick={() => setForgotNotice(true)}
+            style={{ fontSize: 12.5 }}
+            className="text-teal-ink cursor-pointer"
+          >
+            Forgot password?
+          </a>
         </div>
+        {forgotNotice && (
+          <div className="text-[12.5px] text-ink-3 bg-surface-2 border border-line rounded-[8px] px-3 py-2.5">
+            Password reset isn't available yet. Ask your super user to re-send your invite, or contact support to reset.
+          </div>
+        )}
         {error && (
           <div className="text-coral text-[12.5px]" role="alert">
             {error}

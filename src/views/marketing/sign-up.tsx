@@ -69,9 +69,9 @@ export function SignUpScreen({ onSubmit, onSignIn }: SignUpScreenProps) {
         </>
       }
     >
-      <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em' }}>Start your free trial</h2>
+      <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em' }}>Create your account</h2>
       <p style={{ margin: '0 0 22px', fontSize: 13.5 }} className="text-ink-3">
-        14 days free. No card required.
+        Set up your organisation and invite your team.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

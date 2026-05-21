@@ -12,165 +12,74 @@ interface LandingScreenProps {
 export function LandingScreen({ onCta, onSignIn, onClientPortal }: LandingScreenProps) {
   return (
     <div className="min-h-[calc(100vh-48px)] bg-bg text-ink">
-      <header style={{ maxWidth: 1240, margin: '0 auto', padding: '22px 32px', display: 'flex', alignItems: 'center', gap: 24 }}>
+      <header style={{ maxWidth: 1080, margin: '0 auto', padding: '22px 32px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <QFLogo size={20} />
-        <nav style={{ display: 'flex', gap: 22, marginLeft: 24, fontSize: 13.5 }} className="text-ink-2">
-          <a className="cursor-pointer">Product</a>
-          <a className="cursor-pointer">How it works</a>
-          <a className="cursor-pointer">Pricing</a>
-          <a className="cursor-pointer">Customers</a>
-        </nav>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Button variant="ghost" size="sm" icon="phone" onClick={onClientPortal}>Join a queue</Button>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <Button variant="ghost" size="sm" onClick={onSignIn}>Sign in</Button>
-          <Button variant="primary" size="sm" onClick={onCta} iconRight="arrowR">Start free trial</Button>
-        </div>
+          <Button variant="primary" size="sm" onClick={onCta} iconRight="arrowR">Create an account</Button>
+        </span>
       </header>
 
       <section style={{
-        maxWidth: 1240, margin: '0 auto',
-        padding: '40px 32px 64px',
+        maxWidth: 1080, margin: '0 auto',
+        padding: '48px 32px 72px',
         display: 'grid',
         gridTemplateColumns: '1.05fr 1fr',
         gap: 56,
         alignItems: 'center',
       }}>
         <div>
-          <Pill tone="teal" icon="sparkles" style={{ marginBottom: 22 }}>
-            Now in private beta — 14 clinics live
-          </Pill>
           <h1 style={{
-            margin: 0, fontSize: 56, lineHeight: 1.04,
+            margin: 0, fontSize: 52, lineHeight: 1.05,
             fontWeight: 500, letterSpacing: '-0.035em',
             textWrap: 'balance',
           } as React.CSSProperties}>
-            Replace your token machine<br />
-            with a link.
+            Run your waiting room from a link.
           </h1>
           <p style={{
-            margin: '20px 0 0', fontSize: 17, lineHeight: 1.55,
-            maxWidth: 480, textWrap: 'pretty',
+            margin: '20px 0 0', fontSize: 16.5, lineHeight: 1.55,
+            maxWidth: 460,
           } as React.CSSProperties} className="text-ink-2">
-            QueueFlow takes the waiting room online. Clients join from their phone,
-            staff manage live queues from any device, and everyone gets notified the
-            moment things change — so nobody waits longer than they have to.
+            Clients book and check in from their phone. You see every booking,
+            approve walk-ins, and send delay updates without leaving the queue.
           </p>
           <div style={{ display: 'flex', gap: 10, marginTop: 28, alignItems: 'center' }}>
-            <Button variant="primary" size="lg" onClick={onCta} iconRight="arrowR">Start your free trial</Button>
-            <Button variant="ghost" size="lg" icon="zap">Watch the 2-min tour</Button>
-          </div>
-          <div style={{ display: 'flex', gap: 18, marginTop: 22, fontSize: 12.5 }} className="text-ink-3">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="check" size={13} className="text-teal" /> No credit card
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="check" size={13} className="text-teal" /> Set up in 10 minutes
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="check" size={13} className="text-teal" /> POPIA-aligned
-            </span>
+            <Button variant="primary" size="lg" onClick={onCta} iconRight="arrowR">Create an account</Button>
+            <Button variant="ghost" size="lg" onClick={onSignIn}>Sign in</Button>
           </div>
         </div>
 
         <HeroQueuePreview />
       </section>
 
-      <section className="border-t border-b border-line bg-surface">
-        <div style={{
-          maxWidth: 1240, margin: '0 auto',
-          padding: '22px 32px',
-          display: 'flex', alignItems: 'center', gap: 28,
-        }}>
-          <div style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }} className="text-ink-3">
-            Trusted by clinics
-          </div>
-          <div style={{ flex: 1, display: 'flex', gap: 36, flexWrap: 'wrap', alignItems: 'center' }} className="text-ink-3">
-            {['Bryanston Family', 'Linksfield Dental', 'Rosebank Pediatric', 'Cape Quay Health', 'Sandton Skin Clinic', 'Mowbray GP']
-              .map((c) => (
-                <span key={c} style={{ fontSize: 14.5, fontWeight: 500, letterSpacing: '-0.01em' }} className="text-ink-2">{c}</span>
-              ))}
-          </div>
-        </div>
-      </section>
-
-      <section style={{ maxWidth: 1240, margin: '0 auto', padding: '72px 32px 40px' }}>
-        <div style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 40px' }}>
-          <Pill tone="neutral" style={{ marginBottom: 14 }}>How it works</Pill>
-          <h2 style={{ margin: 0, fontSize: 32, fontWeight: 500, letterSpacing: '-0.025em' }}>
-            Three small changes. One quieter waiting room.
-          </h2>
-        </div>
+      <section style={{ maxWidth: 1080, margin: '0 auto', padding: '0 32px 88px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           <FeatureCard
-            n="01" title="Online booking"
-            body="Share one link, or a printed QR at reception. Clients pick a time that suits them — or join the next-available queue."
+            title="One shareable link per seat"
+            body="Each org user gets a portal link or QR. Clients land in the right queue without paperwork."
             icon="link"
           />
           <FeatureCard
-            n="02" title="Live queue"
-            body="Staff see who's pending approval, who's checked in, and who's next — from any device. State changes sync in real time."
+            title="Live queue, approve in one tap"
+            body="Pending approvals, checked-in, and in-service — all in one view. Polls in real time."
             icon="users"
           />
           <FeatureCard
-            n="03" title="Proactive alerts"
-            body="When a consult runs long, downstream clients get an SMS before they leave home. Less frustration, fewer no-shows."
+            title="Automatic delay SMS"
+            body="When a consult overruns, downstream clients get notified before they leave home."
             icon="bell"
           />
         </div>
       </section>
 
-      <section style={{ maxWidth: 1240, margin: '0 auto', padding: '32px 32px 80px' }}>
-        <Card style={{ padding: 0, overflow: 'hidden' }} className="bg-surface border-line-2">
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr' }}>
-            <div style={{ padding: '36px 40px' }}>
-              <Pill tone="teal">Free trial</Pill>
-              <h3 style={{ margin: '14px 0 8px', fontSize: 26, fontWeight: 500, letterSpacing: '-0.02em' }}>
-                14 days free, then R&nbsp;490 per seat per month.
-              </h3>
-              <p style={{ margin: 0, fontSize: 14.5, maxWidth: 440 }} className="text-ink-3">
-                Pay for the seats you fill. Add departments, devices, and client portal
-                links at no extra cost. Annual plans save 20%.
-              </p>
-              <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
-                <Button variant="primary" onClick={onCta} iconRight="arrowR">Start your free trial</Button>
-                <Button variant="ghost">See pricing details</Button>
-              </div>
-            </div>
-            <div style={{
-              borderLeft: '1px solid var(--line)',
-              padding: 32,
-              display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14,
-            }} className="bg-surface-2">
-              {([
-                ['Unlimited departments & seats', null],
-                ['Unlimited client portal links', null],
-                ['Real-time queue routing', null],
-                ['Proactive SMS alerts', '1,000 / mo included'],
-                ['Analytics & utilization reports', null],
-              ] as [string, string | null][]).map(([k, v], i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5 }}>
-                  <Icon name="check" size={14} className="text-teal" />
-                  <span style={{ flex: 1 }} className="text-ink">{k}</span>
-                  {v && <span style={{ fontSize: 12 }} className="text-ink-3">{v}</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      </section>
-
       <footer className="border-t border-line" style={{ padding: '22px 32px' }}>
         <div style={{
-          maxWidth: 1240, margin: '0 auto',
+          maxWidth: 1080, margin: '0 auto',
           display: 'flex', alignItems: 'center', gap: 16,
           fontSize: 12,
         }} className="text-ink-3">
           <QFLogo size={14} />
           <span>© 2026 QueueFlow</span>
-          <span style={{ flex: 1 }} />
-          <a className="cursor-pointer">Privacy</a>
-          <a className="cursor-pointer">Terms</a>
-          <a className="cursor-pointer">Status</a>
         </div>
       </footer>
     </div>
@@ -178,25 +87,21 @@ export function LandingScreen({ onCta, onSignIn, onClientPortal }: LandingScreen
 }
 
 interface FeatureCardProps {
-  n: string;
   title: string;
   body: string;
   icon: string;
 }
 
-function FeatureCard({ n, title, body, icon }: FeatureCardProps) {
+function FeatureCard({ title, body, icon }: FeatureCardProps) {
   return (
-    <Card style={{ padding: 24, height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{
-          width: 32, height: 32, borderRadius: 8,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        }} className="bg-teal-tint text-teal-ink">
-          <Icon name={icon as never} size={16} stroke={1.75} />
-        </span>
-        <span className="mono text-ink-4" style={{ fontSize: 11, letterSpacing: '0.04em' }}>{n}</span>
-      </div>
-      <h3 style={{ margin: '16px 0 6px', fontSize: 18, fontWeight: 500, letterSpacing: '-0.015em' }}>{title}</h3>
+    <Card style={{ padding: 22, height: '100%' }}>
+      <span style={{
+        width: 32, height: 32, borderRadius: 8,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }} className="bg-teal-tint text-teal-ink">
+        <Icon name={icon as never} size={16} stroke={1.75} />
+      </span>
+      <h3 style={{ margin: '14px 0 6px', fontSize: 17, fontWeight: 500, letterSpacing: '-0.015em' }}>{title}</h3>
       <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55 }} className="text-ink-3">{body}</p>
     </Card>
   );
@@ -288,7 +193,7 @@ function HeroQueuePreview() {
           fontSize: 11.5,
         }} className="bg-surface-2 text-ink-3">
           <span className="qf-live-dot" />
-          Live · 23 in queue · synced just now
+          Live preview
         </div>
       </Card>
     </div>
