@@ -103,6 +103,7 @@ function OrgUserDashboardRoute({ initialPage = 'queue' }: { initialPage?: string
       initialPage={initialPage}
       onClaimSeat={() => navigate('/claim')}
       onSignOut={() => navigate('/login', { replace: true })}
+      onPersona={() => navigate('/dashboard')}
     />
   )
 }

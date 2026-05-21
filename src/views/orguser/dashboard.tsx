@@ -22,6 +22,8 @@ interface OrgUserDashboardProps {
   initialPage?: string
   onSignOut?: () => void
   onClaimSeat?: () => void
+  /** Super users impersonating an org user can flip back to the SU dashboard. */
+  onPersona?: (persona: string) => void
 }
 
 const ORG_NAV: SidebarNavItem[] = [
@@ -33,7 +35,7 @@ const ORG_NAV: SidebarNavItem[] = [
   { id: 'profile', label: 'Profile', icon: 'user' },
 ]
 
-export function OrgUserDashboard({ initialPage = 'queue', onSignOut, onClaimSeat }: OrgUserDashboardProps) {
+export function OrgUserDashboard({ initialPage = 'queue', onSignOut, onClaimSeat, onPersona }: OrgUserDashboardProps) {
   const orgName = useAuthStore((s) => s.organisationName)
   const [active, setActive] = useState(initialPage)
   const navigate = useNavigate()
@@ -57,6 +59,7 @@ export function OrgUserDashboard({ initialPage = 'queue', onSignOut, onClaimSeat
           <OrgUserQueueScreen
             onShiftEnded={() => onClaimSeat?.()}
             onSignOut={onSignOut}
+            onPersona={onPersona}
           />
         )}
         {active === 'availability' && <AvailabilityView />}

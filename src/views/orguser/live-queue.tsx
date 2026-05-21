@@ -55,6 +55,8 @@ interface OrgUserQueueScreenProps {
   onShiftEnded: () => void;
   /** Called when the user clicks "Sign out" from the profile menu. */
   onSignOut?: () => void;
+  /** Super users impersonating an org user can flip back to the SU dashboard. */
+  onPersona?: (persona: string) => void;
 }
 
 const EMPTY_QUEUE: QueueResponse = {
@@ -88,7 +90,7 @@ function isLate(booking: BookingResponse): boolean {
 }
 
 
-export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScreenProps) {
+export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUserQueueScreenProps) {
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
   const role = useAuthStore((s) => s.role);
@@ -311,7 +313,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
         </div>
         <span className="flex items-center gap-1.5 text-[12px] text-ink-3 flex-none">
           <span className="qf-live-dot" />
-          {updatedAt ? `Updated ${minutesSince(new Date(updatedAt).toISOString())}m ago` : 'Live'}
+          {updatedAt ? `Updated ${agoLabel(Date.now() - updatedAt)}` : 'Live'}
         </span>
         <Button
           variant="secondary"
@@ -328,6 +330,16 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut }: OrgUserQueueScre
             role={role}
             direction="down"
             items={[
+              ...(role === 'super_user' && onPersona
+                ? [
+                    {
+                      id: 'persona',
+                      label: 'Switch to super user view',
+                      icon: 'refresh' as const,
+                      onSelect: () => onPersona('superuser-dash'),
+                    },
+                  ]
+                : []),
               {
                 id: 'logout',
                 label: 'Sign out',

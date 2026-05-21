@@ -320,7 +320,7 @@ function QueuesView() {
               <span className="qf-live-dot" />
               Live
             </span>
-            <span className="text-[11.5px] text-ink-3">Updated {agoLabel(updatedAt)}</span>
+            <span className="text-[11.5px] text-ink-3">Updated {agoLabel(Date.now() - updatedAt)}</span>
             <Button variant="ghost" icon="refresh" onClick={refresh}>Refresh</Button>
           </div>
         }
@@ -649,7 +649,7 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
                 </Pill>
                 <span className="flex-1" />
                 <span className="text-[11.5px] text-ink-3">
-                  Updated {agoLabel(updatedAt)}
+                  Updated {agoLabel(Date.now() - updatedAt)}
                 </span>
               </div>
               <div
@@ -707,9 +707,9 @@ function DashboardBody({ now, setActive }: DashboardBodyProps) {
                           <b>{s.memberName}</b> on shift at <b>{s.seatName}</b>
                         </div>
                         <div className="text-[11px] text-ink-4 mt-0.5">
-                          Started {agoLabel(new Date(s.startedAt).getTime())}
+                          Started {agoLabel(Date.now() - new Date(s.startedAt).getTime())}
                           {' · '}
-                          last seen {agoLabel(new Date(s.lastSeenAt).getTime() + now * 0)}
+                          last seen {agoLabel(Date.now() - new Date(s.lastSeenAt).getTime())}
                         </div>
                       </div>
                     </div>
@@ -773,7 +773,7 @@ function SeatCard({ tile }: { tile: SeatTile }) {
             <div className="flex-1 min-w-0">
               <div className="text-[12.5px] font-medium truncate">{session.memberName}</div>
               <div className="text-[11px] text-ink-3">
-                Started {agoLabel(new Date(session.startedAt).getTime())}
+                Started {agoLabel(Date.now() - new Date(session.startedAt).getTime())}
               </div>
             </div>
             <span className="qf-live-dot" />
