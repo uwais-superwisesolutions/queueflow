@@ -298,6 +298,7 @@ interface InviteModalProps {
 }
 
 function InviteModal({ open, seats, onClose, onSent }: InviteModalProps) {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<MemberRole>('org_user');
   const [preferredSeat, setPreferredSeat] = useState('');
@@ -306,6 +307,7 @@ function InviteModal({ open, seats, onClose, onSent }: InviteModalProps) {
 
   useEffect(() => {
     if (!open) {
+      setFullName('');
       setEmail('');
       setRole('org_user');
       setPreferredSeat('');
@@ -315,6 +317,10 @@ function InviteModal({ open, seats, onClose, onSent }: InviteModalProps) {
   }, [open]);
 
   const send = async () => {
+    if (!fullName.trim()) {
+      setError('Full name is required.');
+      return;
+    }
     if (!email.trim()) {
       setError('Email is required.');
       return;
@@ -324,6 +330,7 @@ function InviteModal({ open, seats, onClose, onSent }: InviteModalProps) {
     try {
       await inviteUser({
         email: email.trim(),
+        fullName: fullName.trim(),
         role,
         preferredSeat: preferredSeat || null,
       });
@@ -357,6 +364,14 @@ function InviteModal({ open, seats, onClose, onSent }: InviteModalProps) {
       }
     >
       <div className="flex flex-col gap-3.5">
+        <Field label="Full name" hint="Shown to clients and on the queue.">
+          <TextInput
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Jane Doe"
+            autoFocus
+          />
+        </Field>
         <Field label="Email" hint="They'll get a magic-link sign-in.">
           <TextInput
             value={email}

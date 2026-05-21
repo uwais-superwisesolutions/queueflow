@@ -34,6 +34,7 @@ export interface MemberResponse {
 
 export interface InviteUserPayload {
   email: string;
+  fullName?: string | null;
   role?: MemberRole;
   preferredSeat?: string | null;
   redirectTo?: string | null;
