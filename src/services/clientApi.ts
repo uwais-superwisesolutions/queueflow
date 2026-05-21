@@ -3,6 +3,7 @@ import type {
   ClientConsultantResponse,
   ClientOrgInfoResponse,
   ClientProfileResponse,
+  NotificationResponse,
   TimeslotTypeResponse,
   UpdateClientProfilePayload,
 } from '@/types';
@@ -46,5 +47,18 @@ export function listClientConsultants(timeslotTypeId?: string) {
     url: '/api/client/org-members',
     method: 'GET',
     params: timeslotTypeId ? { timeslotTypeId } : undefined,
+  });
+}
+
+/**
+ * Notifications addressed to the currently-authenticated client. Backend
+ * scopes by JWT ClientId — passing a bookingId narrows further to that
+ * booking's updates only.
+ */
+export function listMyClientNotifications(query: { bookingId?: string; limit?: number } = {}) {
+  return api.request<NotificationResponse[]>({
+    url: '/api/client/notifications',
+    method: 'GET',
+    params: query,
   });
 }

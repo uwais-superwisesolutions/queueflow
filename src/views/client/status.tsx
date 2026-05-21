@@ -1,20 +1,22 @@
  
 import { useEffect, useMemo, useState } from 'react';
 import { PhoneFrame } from '@/components/layout';
-import { Icon, Button, Card, SkeletonBox, SkeletonLine, useConfirm } from '@/components/ui';
+import { Icon, Button, Card, Pill, SkeletonBox, SkeletonLine, useConfirm } from '@/components/ui';
 import { useTick } from '@/hooks/use-tick';
 import { usePolling } from '@/hooks/use-polling';
 import { POLL_INTERVAL_MS } from '@/lib/realtime-channels';
-import { formatHMS } from '@/lib/time';
+import { agoLabel, formatHMS } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { fmtTime, fmtDate } from '@/lib/date';
+import { describeNotification } from '@/lib/notification-display';
 import { getApiErrorMessage } from '@/lib/api-error';
 import {
   cancelMyClientBooking,
   listMyClientBookings,
 } from '@/services/clientBookingApi';
+import { listMyClientNotifications } from '@/services/clientApi';
 import { getCachedPortalScan } from '@/lib/client-org';
-import type { BookingResponse, BookingStatus } from '@/types';
+import type { BookingResponse, BookingStatus, NotificationResponse } from '@/types';
 
 interface ClientStatusScreenProps {
   bookingId?: string;
@@ -261,6 +263,8 @@ export function ClientStatusScreen({ bookingId, onCancel, onBookAnother }: Clien
           </Card>
         </div>
 
+        <UpdatesSection bookingId={booking.id} />
+
         {otherActive.length > 0 && (
           <div className="px-4 pb-4">
             <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold mb-2">
@@ -343,5 +347,167 @@ function DetailRow({
       <span className="text-[12px] text-ink-3 w-[70px]">{label}</span>
       <span className="text-[13px] font-medium truncate">{value}</span>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
+// Updates — every SMS we sent (or tried to send) about this booking. The
+// /api/client/notifications endpoint is JWT-scoped to the caller's ClientId
+// on the backend, so even a `?bookingId=` collision can only return rows
+// that belong to this client.
+// ─────────────────────────────────────────────────
+
+const PORTAL_URL_SUFFIX_RE = /\s*Track your spot:\s*\S+\s*$/i;
+
+function stripPortalUrl(body: string): string {
+  return body.replace(PORTAL_URL_SUFFIX_RE, '').trim();
+}
+
+function UpdatesSection({ bookingId }: { bookingId: string }) {
+  const [items, setItems] = useState<NotificationResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      const res = await listMyClientNotifications({ bookingId, limit: 25 });
+      setItems(res.data);
+      setError(null);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not load updates.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Wrap in an IIFE so the effect body itself doesn't await setState calls
+    // — matches the pattern used by the main refresh effect above and
+    // satisfies the react-hooks/set-state-in-effect lint rule.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await listMyClientNotifications({ bookingId, limit: 25 });
+        if (cancelled) return;
+        setItems(res.data);
+        setError(null);
+      } catch (err) {
+        if (!cancelled) setError(getApiErrorMessage(err, 'Could not load updates.'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId]);
+
+  usePolling(load, POLL_INTERVAL_MS.notifications);
+
+  if (loading && items.length === 0) {
+    return (
+      <div className="px-4 pb-4">
+        <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold mb-2">
+          Updates
+        </div>
+        <Card padding={0}>
+          <div className="px-3.5 py-3 text-[12.5px] text-ink-3">Loading…</div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-4 pb-4">
+        <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold mb-2">
+          Updates
+        </div>
+        <Card padding={0}>
+          <div className="px-3.5 py-3 text-[12.5px] text-coral" role="alert">
+            <Icon name="alert" size={12} /> {error}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // No notifications yet — the booking may have just been created and the
+  // approval/scheduled message hasn't fired. Hide the section entirely so it
+  // doesn't show an awkward empty box on a fresh booking.
+  if (items.length === 0) return null;
+
+  return (
+    <div className="px-4 pb-4">
+      <div className="text-[11px] text-ink-4 uppercase tracking-[0.06em] font-semibold mb-2">
+        Updates
+      </div>
+      <Card padding={0}>
+        {items.map((n, i) => (
+          <UpdateRow
+            key={n.id}
+            notification={n}
+            divider={i < items.length - 1}
+          />
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+function UpdateRow({
+  notification,
+  divider,
+}: {
+  notification: NotificationResponse;
+  divider: boolean;
+}) {
+  const { tone, title } = describeNotification(notification.notificationType);
+  const ms = Date.now() - new Date(notification.createdAt).getTime();
+  const body = stripPortalUrl(notification.body);
+
+  // Status pill only shown when delivery isn't a clean "sent" — keeps the
+  // happy path uncluttered. Failed rows surface a soft "Couldn't deliver"
+  // hint so the client knows to update their number.
+  const statusPill =
+    notification.status === 'failed' ? (
+      <Pill tone="coral" className="flex-none text-[10px]">
+        Couldn't deliver
+      </Pill>
+    ) : notification.status === 'pending' ? (
+      <Pill tone="neutral" className="flex-none text-[10px]">
+        Queued
+      </Pill>
+    ) : null;
+
+  return (
+    <div className={cn('px-3.5 py-2.5 flex gap-2.5', divider && 'border-b border-line')}>
+      <UpdateToneBadge tone={tone} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <div className="text-[12.5px] font-medium truncate">{title}</div>
+          {statusPill}
+        </div>
+        <div className="text-[11.5px] text-ink-3 mt-0.5 leading-relaxed">{body}</div>
+        <div className="text-[11px] text-ink-4 mt-1">{agoLabel(ms)}</div>
+      </div>
+    </div>
+  );
+}
+
+function UpdateToneBadge({ tone }: { tone: 'coral' | 'amber' | 'blue' }) {
+  const map = {
+    coral: { icon: 'alert', bg: 'var(--coral-tint)', fg: 'var(--coral-2)' },
+    amber: { icon: 'bell', bg: 'var(--amber-tint)', fg: 'var(--amber)' },
+    blue: { icon: 'info', bg: 'var(--blue-tint)', fg: 'var(--blue)' },
+  } as const;
+  const m = map[tone];
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-[6px] flex-none"
+      style={{ width: 22, height: 22, background: m.bg, color: m.fg }}
+    >
+      <Icon name={m.icon} size={12} />
+    </span>
   );
 }
