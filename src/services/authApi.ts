@@ -42,3 +42,18 @@ export function updatePassword(payload: { password: string }) {
     data: payload,
   });
 }
+
+/**
+ * Pre-auth — fires off a Supabase password-reset email. Always returns 200
+ * so callers can't enumerate which emails exist. Bypasses the shared `api`
+ * interceptor since the user has no token at this point.
+ */
+export function forgotPassword(payload: { email: string }) {
+  return axios.request<{ message: string }>({
+    baseURL: import.meta.env.VITE_API_BASE_URL,
+    url: '/api/auth/forgot-password',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: payload,
+  });
+}

@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { ConfirmProvider } from '@/components/ui'
-import { consumeInviteCallback } from '@/lib/invite-callback'
+import { consumeInviteCallback, consumeRecoveryCallback } from '@/lib/invite-callback'
 import router from './route'
 import './index.css'
 
@@ -10,6 +10,7 @@ import './index.css'
 //   - the hash is stripped before BrowserRouter computes its initial location
 //   - tokens are in localStorage when the first axios call fires
 consumeInviteCallback()
+consumeRecoveryCallback()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, Field, TextInput } from '@/components/ui';
 import { AuthCard } from './landing';
-import { login } from '@/services/authApi';
+import { forgotPassword, login } from '@/services/authApi';
 import { getOrganisation } from '@/services/organisationApi';
 import { useAuthStore } from '@/stores/authStore';
 import { getApiErrorMessage } from '@/lib/api-error';
@@ -23,9 +23,28 @@ export function LoginScreen({ onSubmit, onSignUp }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [forgotNotice, setForgotNotice] = useState(false);
+  const [resetSending, setResetSending] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const setSession = useAuthStore((s) => s.setSession);
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+
+  const handleForgot = async () => {
+    if (!email.trim()) {
+      setError('Enter your email above first, then click "Forgot password?" again.');
+      return;
+    }
+    setError(null);
+    setResetSent(false);
+    setResetSending(true);
+    try {
+      await forgotPassword({ email: email.trim() });
+      setResetSent(true);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not send reset email.'));
+    } finally {
+      setResetSending(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setError(null);
@@ -86,16 +105,16 @@ export function LoginScreen({ onSubmit, onSignUp }: LoginScreenProps) {
         </Field>
         <div style={{ textAlign: 'right', marginTop: -6 }}>
           <a
-            onClick={() => setForgotNotice(true)}
-            style={{ fontSize: 12.5 }}
+            onClick={resetSending ? undefined : handleForgot}
+            style={{ fontSize: 12.5, opacity: resetSending ? 0.5 : 1 }}
             className="text-teal-ink cursor-pointer"
           >
-            Forgot password?
+            {resetSending ? 'Sending…' : 'Forgot password?'}
           </a>
         </div>
-        {forgotNotice && (
-          <div className="text-[12.5px] text-ink-3 bg-surface-2 border border-line rounded-[8px] px-3 py-2.5">
-            Password reset isn't available yet. Ask your super user to re-send your invite, or contact support to reset.
+        {resetSent && (
+          <div className="text-[12.5px] text-ink-2 bg-surface-2 border border-line rounded-[8px] px-3 py-2.5">
+            If that email is registered, we've sent a reset link. Check your inbox.
           </div>
         )}
         {error && (
