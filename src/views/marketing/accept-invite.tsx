@@ -178,7 +178,7 @@ function ConfirmStep({
   setOnboardingComplete,
   onSubmit,
 }: ConfirmStepProps) {
-  const [email, setEmail] = useState(storedEmail ?? '');
+  const [email] = useState(storedEmail ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -256,12 +256,14 @@ function ConfirmStep({
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Field label="Invitation email">
+        <Field label="Invitation email" hint="Matched to your invitation — can't be changed here.">
           <TextInput
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            readOnly
+            disabled
             placeholder="name@clinic.com"
             icon="send"
+            className="cursor-not-allowed opacity-70"
           />
         </Field>
         {error && (
