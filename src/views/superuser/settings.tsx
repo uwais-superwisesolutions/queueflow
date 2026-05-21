@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react';
-import { Button, Card, Field, Icon, Modal, SelectInput, TextInput, useConfirm } from '@/components/ui';
+import { Button, Card, Field, Icon, Modal, TextInput, useConfirm } from '@/components/ui';
 import { fmtDate } from '@/lib/date';
 import { TopBar } from '@/components/layout';
 import type { OrganisationResponse, PublicHolidayResponse } from '@/types';
