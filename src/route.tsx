@@ -259,7 +259,6 @@ const router = createBrowserRouter([
       { path: '/dashboard/seats',      element: wrap(<DashboardRoute initialPage="seats" />) },
       { path: '/dashboard/timeslots',  element: wrap(<DashboardRoute initialPage="timeslots" />) },
       { path: '/dashboard/links',      element: wrap(<DashboardRoute initialPage="links" />) },
-      { path: '/dashboard/analytics',  element: wrap(<DashboardRoute initialPage="analytics" />) },
       { path: '/dashboard/settings',   element: wrap(<DashboardRoute initialPage="settings" />) },
 
       // OrgUser

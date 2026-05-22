@@ -31,7 +31,6 @@ import { SeatsView } from './seats';
 import { TimeslotsView } from './timeslot-types';
 import { SettingsView } from './settings';
 import { PortalLinksView } from './portal-links';
-import { AnalyticsView } from './management';
 
 const SU_NAV_BASE: SidebarNavItem[] = [
   { id: 'dashboard', label: 'Dashboard',           icon: 'grid' },
@@ -40,7 +39,6 @@ const SU_NAV_BASE: SidebarNavItem[] = [
   { id: 'seats',     label: 'Seats & departments', icon: 'chair' },
   { id: 'timeslots', label: 'Configure Services',  icon: 'clock' },
   { id: 'links',     label: 'Client portal links', icon: 'link' },
-  { id: 'analytics', label: 'Analytics',           icon: 'zap' },
   { heading: 'Workspace' },
   { id: 'settings',  label: 'Settings',            icon: 'settings' },
 ];
@@ -52,7 +50,6 @@ const NAV_PATHS: Record<string, string> = {
   seats:     '/dashboard/seats',
   timeslots: '/dashboard/timeslots',
   links:     '/dashboard/links',
-  analytics: '/dashboard/analytics',
   settings:  '/dashboard/settings',
 };
 
@@ -220,7 +217,6 @@ export function SuperUserDashboard({
         {active === 'seats'     && <SeatsView />}
         {active === 'timeslots' && <TimeslotsView />}
         {active === 'links'     && <PortalLinksView onOpenClientPortal={onOpenClientPortal} />}
-        {active === 'analytics' && <AnalyticsView />}
         {active === 'queues'    && <QueuesView />}
         {active === 'settings'  && <SettingsView />}
       </main>
