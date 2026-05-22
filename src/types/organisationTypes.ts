@@ -6,6 +6,13 @@ export interface OrganisationResponse {
   industry: string | null;
   logoUrl: string | null;
   brandColor: string | null;
+  /**
+   * IANA timezone name (e.g. "Africa/Johannesburg"). Availability windows
+   * are interpreted in this zone. UI converts slot UTC instants to the
+   * browser's local zone for display; this field exists so the org-user
+   * availability editor can show "Times shown in {timezone}".
+   */
+  timezone: string;
   onboardingStep: string | null;
   onboardingComplete: boolean;
   createdAt: string;
@@ -15,6 +22,7 @@ export interface UpdateBrandingPayload {
   industry?: string | null;
   logoUrl?: string | null;
   brandColor?: string | null;
+  timezone?: string | null;
 }
 
 export interface UpdateOnboardingStepPayload {

@@ -18,6 +18,8 @@ export interface SlotSelection {
   slot: SlotResponse;
   /** What we display to the user on confirm (short label). */
   label: string;
+  /** Extra services chosen on the slot picker; forwarded into createClientBooking. */
+  additionalTimeslotTypeIds?: string[];
 }
 
 interface ClientSlotPickerScreenProps {
@@ -158,6 +160,9 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
   // Filters
   const [date, setDate] = useState(today);
   const [timeslotTypeId, setTimeslotTypeId] = useState<string>('');
+  // Extra services stacked back-to-back on top of the primary. UI is
+  // opt-in — the default flow stays single-service.
+  const [additionalIds, setAdditionalIds] = useState<string[]>([]);
   const [consultantId, setConsultantId] = useState<string>(ANY_CONSULTANT);
 
   // Catalog (timeslot types + consultants for the org)
@@ -243,6 +248,7 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
           to: date,
           timeslotTypeId,
           orgMemberId: consultantId || undefined,
+          additionalTimeslotTypeIds: additionalIds.length > 0 ? additionalIds : undefined,
         });
         if (cancelled) return;
         // Sort ascending by start time so the grid + earliest-available read
@@ -259,7 +265,7 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
     return () => {
       cancelled = true;
     };
-  }, [date, timeslotTypeId, consultantId]);
+  }, [date, timeslotTypeId, consultantId, additionalIds]);
 
   // When "Anyone" is selected, the backend returns one slot per (consultant,
   // time) pair — collapse to one tile per time. We retain the first available
@@ -282,6 +288,8 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
     onSelect({
       slot,
       label: `${fmtTime(slot.startAt)} · ${durationMinutes(slot.startAt, slot.endAt)} min`,
+      additionalTimeslotTypeIds:
+        additionalIds.filter(Boolean).length > 0 ? additionalIds.filter(Boolean) : undefined,
     });
   };
 
@@ -295,6 +303,41 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
     ],
     [timeslotTypes],
   );
+
+  const durationByTypeId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of timeslotTypes) map.set(t.id, t.durationMinutes);
+    return map;
+  }, [timeslotTypes]);
+
+  // Sum of (primary + extras) durations, used in the "Total: X min" label
+  // and to gate the "+ Add another service" affordance once nothing more
+  // could possibly fit.
+  const totalMinutes = useMemo(() => {
+    if (!timeslotTypeId) return 0;
+    let sum = durationByTypeId.get(timeslotTypeId) ?? 0;
+    for (const id of additionalIds) sum += durationByTypeId.get(id) ?? 0;
+    return sum;
+  }, [timeslotTypeId, additionalIds, durationByTypeId]);
+
+  // Services that are still selectable as an *additional* row — exclude the
+  // primary and any already-picked extras to keep one service per slot.
+  const optionsForExtra = (excludeId?: string): { value: string; label: string; disabled?: boolean }[] => {
+    const used = new Set<string>([timeslotTypeId, ...additionalIds].filter(Boolean));
+    if (excludeId) used.delete(excludeId);
+    return [
+      { value: '', label: 'Pick a service…', disabled: true },
+      ...timeslotTypes
+        .filter((t) => !used.has(t.id))
+        .map((t) => ({ value: t.id, label: `${t.name} · ${t.durationMinutes} min` })),
+    ];
+  };
+
+  const canAddAnother =
+    !!timeslotTypeId &&
+    timeslotTypes.length > 1 + additionalIds.length &&
+    // last row must have been filled before adding a new one
+    additionalIds.every((id) => id);
 
   const consultantOptions = useMemo(
     () => [
@@ -340,11 +383,69 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
             ) : (
               <SelectInput
                 value={timeslotTypeId}
-                onChange={(e) => setTimeslotTypeId(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setTimeslotTypeId(next);
+                  // Changing the primary may clash with an extra of the
+                  // same id — drop any extra that now duplicates it.
+                  setAdditionalIds((curr) => curr.filter((id) => id !== next));
+                }}
                 options={timeslotTypeOptions}
               />
             )}
           </Field>
+
+          {/* Optional additional services. Each row is a separate select;
+              an empty value lets the user open the dropdown without
+              committing. Removing rows is per-row via the × button. */}
+          {!catalogLoading && additionalIds.map((id, idx) => (
+            <div key={`extra-${idx}`} className="flex items-end gap-2">
+              <div className="flex-1 min-w-0">
+                <Field label={idx === 0 ? 'Then also' : 'Then also'}>
+                  <SelectInput
+                    value={id}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setAdditionalIds((curr) => {
+                        const out = [...curr];
+                        out[idx] = next;
+                        return out;
+                      });
+                    }}
+                    options={optionsForExtra(id)}
+                  />
+                </Field>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdditionalIds((curr) => curr.filter((_, i) => i !== idx))}
+                className="h-[38px] w-[38px] rounded-[8px] border border-line-2 bg-surface text-ink-3 cursor-pointer hover:bg-surface-2 flex items-center justify-center flex-none"
+                aria-label="Remove this service"
+                title="Remove"
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          ))}
+
+          {!catalogLoading && (
+            <div className="flex items-center justify-between mt-0.5">
+              <button
+                type="button"
+                onClick={() => setAdditionalIds((curr) => [...curr, ''])}
+                disabled={!canAddAnother}
+                className="inline-flex items-center gap-1 text-[12.5px] text-teal-ink bg-transparent border-0 p-0 cursor-pointer disabled:opacity-40 disabled:cursor-default"
+              >
+                <Icon name="plus" size={12} />
+                Add another service
+              </button>
+              {totalMinutes > 0 && additionalIds.length > 0 && (
+                <span className="text-[11.5px] text-ink-3">
+                  Total: <span className="mono tnum text-ink">{totalMinutes} min</span>
+                </span>
+              )}
+            </div>
+          )}
 
           {consultants.length > 0 && (
             <Field label="Consultant" hint="Optional — leave on Anyone for the earliest slot.">

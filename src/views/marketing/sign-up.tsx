@@ -43,6 +43,13 @@ export function SignUpScreen({ onSubmit, onSignIn }: SignUpScreenProps) {
     setError(null);
     setSubmitting(true);
     try {
+      // Auto-capture the browser timezone so the new org's availability
+      // is interpreted in the right zone from day 1. Falls back gracefully
+      // if Intl is unavailable (no-op — backend defaults to UTC).
+      const detectedTz =
+        (typeof Intl !== 'undefined'
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : null) || null;
       const response = await signUp({
         email: form.email.trim(),
         password: form.password,
@@ -50,6 +57,7 @@ export function SignUpScreen({ onSubmit, onSignIn }: SignUpScreenProps) {
         lastName: form.lastName.trim(),
         orgName: form.orgName.trim(),
         industry: form.industry || null,
+        timezone: detectedTz,
       });
       setSession(response.data);
       onSubmit?.();

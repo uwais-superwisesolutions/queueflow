@@ -21,6 +21,8 @@ interface ClientConfirmationScreenProps {
   slot: SlotResponse;
   /** Optional reason-for-visit captured on /client/details for new clients. */
   clientReason?: string | null;
+  /** Optional. Extra services stacked on the booking (multi-service flow). */
+  additionalTimeslotTypeIds?: string[];
   onResolved: (departure: ConfirmationDeparture) => void;
   onPickAnother: () => void;
 }
@@ -29,7 +31,13 @@ const POLL_INTERVAL_MS = 4_000;
 
 
 
-export function ClientConfirmationScreen({ slot, clientReason, onResolved, onPickAnother }: ClientConfirmationScreenProps) {
+export function ClientConfirmationScreen({
+  slot,
+  clientReason,
+  additionalTimeslotTypeIds,
+  onResolved,
+  onPickAnother,
+}: ClientConfirmationScreenProps) {
   const [booking, setBooking] = useState<BookingResponse | null>(null);
   const [creating, setCreating] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +66,10 @@ export function ClientConfirmationScreen({ slot, clientReason, onResolved, onPic
           timeslotTypeId: slot.timeslotTypeId,
           scheduledStartAt: slot.startAt,
           clientReason: clientReason ?? null,
+          additionalTimeslotTypeIds:
+            additionalTimeslotTypeIds && additionalTimeslotTypeIds.length > 0
+              ? additionalTimeslotTypeIds
+              : undefined,
         });
         setBooking(resp.data);
       } catch (err) {
@@ -66,7 +78,7 @@ export function ClientConfirmationScreen({ slot, clientReason, onResolved, onPic
         setCreating(false);
       }
     })();
-  }, [slot, clientReason]);
+  }, [slot, clientReason, additionalTimeslotTypeIds]);
 
   // Live countdown for the soft-hold.
   useEffect(() => {

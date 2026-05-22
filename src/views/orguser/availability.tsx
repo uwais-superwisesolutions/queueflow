@@ -30,6 +30,7 @@ import {
   listMyAvailabilityExceptions,
   replaceMyAvailabilityPatterns,
 } from '@/services/availabilityApi';
+import { getOrganisation } from '@/services/organisationApi';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { fmtDate, fmtDateTime, fmtTime, todayInTz } from '@/lib/date';
 
@@ -164,6 +165,19 @@ function rangeLabel(view: ViewMode, anchor: Date): string {
 export function AvailabilityView() {
   const [anchorDate, setAnchorDate] = useState<Date>(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
+  // Read the org timezone once so the banner can show "Times shown in {tz}".
+  // Failure is non-fatal — we just don't render the banner.
+  const [orgTimezone, setOrgTimezone] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await getOrganisation();
+        if (!cancelled) setOrgTimezone(resp.data.timezone || null);
+      } catch { /* banner is best-effort */ }
+    })();
+    return () => { cancelled = true };
+  }, []);
 
   const shift = (direction: 1 | -1) => {
     if (viewMode === 'day') setAnchorDate((d) => addDays(d, direction));
@@ -183,6 +197,15 @@ export function AvailabilityView() {
         breadcrumb={['Dashboard', 'Availability']}
       />
       <div className="flex-1 overflow-auto qf-scroll qf-page">
+        {orgTimezone && (
+          <div className="mb-3 flex items-center gap-1.5 text-[12px] text-ink-3">
+            <Icon name="clock" size={12} />
+            <span>
+              Times shown in <span className="font-medium text-ink-2">{orgTimezone}</span>{' '}
+              (your organisation's timezone). Clients see slots in their own local time.
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="flex items-center gap-1.5">
             <Button

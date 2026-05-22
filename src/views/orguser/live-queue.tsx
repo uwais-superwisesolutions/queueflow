@@ -39,6 +39,7 @@ import {
   endShift,
   getMySeatAssignment,
   heartbeat,
+  pushDelay,
 } from '@/services/sessionApi';
 import type {
   BookingResponse,
@@ -109,6 +110,9 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number>(0);
+  // Manual delay push modal
+  const [delayModalOpen, setDelayModalOpen] = useState(false);
+  const [delayToast, setDelayToast] = useState<string | null>(null);
   const confirm = useConfirm();
 
   // Live elapsed-time tick for the "In service" timer.
@@ -317,6 +321,13 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
         </span>
         <Button
           variant="secondary"
+          icon="clock"
+          onClick={() => setDelayModalOpen(true)}
+        >
+          Push delay
+        </Button>
+        <Button
+          variant="secondary"
           icon="logout"
           onClick={handleEndShift}
           disabled={endingShift}
@@ -523,7 +534,124 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
           await handleReject(id, reason);
         }}
       />
+
+      <DelayPushModal
+        open={delayModalOpen}
+        onClose={() => setDelayModalOpen(false)}
+        onSubmit={async (minutes) => {
+          setActionError(null);
+          try {
+            const resp = await pushDelay(minutes);
+            setDelayModalOpen(false);
+            setDelayToast(
+              `Shifted ${resp.data.shifted} booking${resp.data.shifted === 1 ? '' : 's'} — clients notified.`,
+            );
+            window.setTimeout(() => setDelayToast(null), 4000);
+            await fetchQueue();
+          } catch (err) {
+            setActionError(getApiErrorMessage(err, 'Could not push delay.'));
+            setDelayModalOpen(false);
+          }
+        }}
+      />
+
+      {delayToast && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-[10px] border bg-surface px-3.5 py-2.5 shadow-md flex items-center gap-2 text-[12.5px]"
+          style={{
+            borderColor: 'color-mix(in oklab, var(--teal) 30%, transparent)',
+            background: 'var(--teal-tint)',
+            color: 'var(--teal-ink)',
+          }}
+        >
+          <Icon name="check" size={14} />
+          <span>{delayToast}</span>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Manual delay push modal
+// ─────────────────────────────────────────────────────────────────
+
+function DelayPushModal({
+  open,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (minutes: number) => Promise<void> | void;
+}) {
+  const [minutes, setMinutes] = useState(15);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setMinutes(15);
+      setSubmitting(false);
+      setError(null);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleSubmit = async () => {
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 240) {
+      setError('Enter a value between 1 and 240 minutes.');
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onSubmit(minutes);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Push a delay"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            icon="clock"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? 'Pushing…' : 'Push delay'}
+          </Button>
+        </>
+      }
+    >
+      <Field
+        label="Add this many minutes"
+        hint="Shifts every upcoming and checked-in booking forward. Each affected client gets an SMS."
+      >
+        <TextInput
+          type="number"
+          value={String(minutes)}
+          onChange={(e) => setMinutes(Math.max(0, Number(e.target.value) || 0))}
+          autoFocus
+        />
+      </Field>
+      {error && (
+        <div className="text-coral text-[12.5px] mt-2" role="alert">
+          {error}
+        </div>
+      )}
+    </Modal>
   );
 }
 
