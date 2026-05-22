@@ -19,7 +19,7 @@ Core goals:
 - Keep route wiring centralized
 - Keep page-level flows easy to follow
 - Keep reusable UI primitives small and consistent
-- Keep future API/auth behavior centralized instead of scattered through views
+- Keep API/auth behavior centralized instead of scattered through views
 
 ---
 
@@ -93,7 +93,7 @@ Primary directories in `src/`:
 - `components/ui/` - Base UI primitives (`Button`, `Card`, `Field`, `Modal`, etc.)
 - `components/layout/` - Shared layout pieces (`Sidebar`, `TopBar`, `PhoneFrame`, `QFLogo`)
 - `layouts/` - Route shells (`AppLayout`, `GuestLayout`)
-- `services/` - API transport and future domain service functions
+- `services/` - API transport and domain service functions
 - `types/` - Shared TypeScript contracts and UI type unions
 - `hooks/` - Reusable React hooks
 - `lib/` - Pure utilities (`cn`, time formatting, hashing)
@@ -174,7 +174,7 @@ Auth is connected, but route protection is still incomplete. Next auth work shou
 - Store only session-wide auth/profile data globally
 - Keep role/permission checks close to routes or layout boundaries
 
-Recommended future guard shape:
+Recommended guard shape:
 
 ```tsx
 {
@@ -279,7 +279,7 @@ If backend error shapes become inconsistent, add a shared `src/lib/api-error.ts`
 Use the lightest state mechanism that satisfies the scope.
 
 1. **Local component state**
-   - Default for forms, tabs, selected rows, modal visibility, mock data mutation, and loading flags
+   - Default for forms, tabs, selected rows, modal visibility, local list edits, and loading flags
 2. **Custom hooks**
    - Reusable behavior with lifecycle concerns, such as timers (`src/hooks/use-tick.ts`)
 3. **Zustand**
@@ -625,4 +625,4 @@ When making changes with AI assistance:
 Default decision rule:
 - If code is only useful to one screen, keep it near that screen
 - If code is reused by multiple feature groups, promote it to `components`, `hooks`, `lib`, or `types`
-- If behavior crosses routes or sessions, add a Zustand store under `src/stores/` (created on demand — the folder is intentionally absent until needed)
+- If behavior crosses routes or sessions, add or extend a focused Zustand store under `src/stores/`
