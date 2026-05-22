@@ -8,6 +8,7 @@ import { fmtTime, durationMinutes } from '@/lib/date';
 import { getApiErrorMessage } from '@/lib/api-error';
 import type {
   ClientConsultantResponse,
+  EmptyReason,
   SlotResponse,
   TimeslotTypeResponse,
 } from '@/types';
@@ -35,6 +36,117 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function fmtFriendlyDate(isoDateString: string): string {
+  // YYYY-MM-DD → "22 May 2026" using the user's locale ordering.
+  const [y, m, d] = isoDateString.split('-').map(Number);
+  if (!y || !m || !d) return isoDateString;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+interface EmptyCopy {
+  tone: 'coral' | 'amber';
+  title: string;
+  body: string;
+}
+
+/**
+ * Maps an EmptyReason into rendered copy. When the consultant filter is
+ * "Anyone" we soften the message — naming a specific consultant doesn't
+ * make sense when the user explicitly asked the system to pick. For all
+ * other reasons we use the first-name from the backend (which only ever
+ * sends a first name, never a full name or exception detail).
+ */
+function describeEmptyReason(
+  reason: EmptyReason,
+  options: { consultantSelected: boolean; serviceName: string | null },
+): EmptyCopy {
+  const dateLabel = fmtFriendlyDate(reason.date);
+  const name = reason.orgMemberFirstName ?? 'Your consultant';
+  const service = options.serviceName ?? 'this service';
+
+  if (reason.reason === 'past') {
+    return {
+      tone: 'coral',
+      title: 'Date is in the past',
+      body: 'Pick today or a future date.',
+    };
+  }
+
+  if (reason.reason === 'public_holiday') {
+    return {
+      tone: 'amber',
+      title: 'Public holiday',
+      body: `Closed for the public holiday on ${dateLabel}.`,
+    };
+  }
+
+  // For Anyone mode, the reason rolled up across all eligible consultants —
+  // naming one of them is misleading. Use a generic message.
+  if (!options.consultantSelected) {
+    if (reason.reason === 'no_eligible_members') {
+      return {
+        tone: 'amber',
+        title: 'No consultants offer this yet',
+        body: `${service} isn't offered by any consultant right now.`,
+      };
+    }
+    return {
+      tone: 'amber',
+      title: 'No openings',
+      body: `No consultants are available for ${service} on ${dateLabel}. Try a different date.`,
+    };
+  }
+
+  switch (reason.reason) {
+    case 'service_not_offered':
+      return {
+        tone: 'coral',
+        title: `${name} doesn't offer ${service}`,
+        body: `${name} doesn't offer ${service}. Pick another consultant or a different service.`,
+      };
+    case 'blocked':
+      return {
+        tone: 'coral',
+        title: `${name} is unavailable`,
+        body: `${name} isn't available on ${dateLabel}. Try a different date or pick another consultant.`,
+      };
+    case 'off_today':
+      return {
+        tone: 'amber',
+        title: `${name} isn't working`,
+        body: `${name} isn't working on ${dateLabel}. Try a different date or pick another consultant.`,
+      };
+    case 'service_too_long':
+      return {
+        tone: 'coral',
+        title: "Service doesn't fit",
+        body: `${name}'s working hours on ${dateLabel} are too short for a ${service} (${reason.detail ?? 'long appointment'}).`,
+      };
+    case 'fully_booked':
+      return {
+        tone: 'amber',
+        title: `${name} is fully booked`,
+        body: `${name} is fully booked on ${dateLabel}. Try a different date or pick another consultant.`,
+      };
+    case 'no_eligible_members':
+      return {
+        tone: 'amber',
+        title: 'No consultants',
+        body: `${service} isn't offered by any consultant right now.`,
+      };
+    default:
+      return {
+        tone: 'amber',
+        title: 'No openings',
+        body: 'Try a different date or service.',
+      };
+  }
+}
+
 export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScreenProps) {
   const today = useMemo(() => isoDate(new Date()), []);
   const horizonMax = useMemo(() => {
@@ -58,6 +170,10 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
   const [slots, setSlots] = useState<SlotResponse[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+  // Backend explains *why* there are no slots when the result is empty. We
+  // keep just the first reason (the backend sorts them by priority — most
+  // actionable first).
+  const [emptyReason, setEmptyReason] = useState<EmptyReason | null>(null);
 
   // Load timeslot types once.
   useEffect(() => {
@@ -114,6 +230,7 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
   useEffect(() => {
     if (!timeslotTypeId) {
       setSlots([]);
+      setEmptyReason(null);
       return;
     }
     let cancelled = false;
@@ -130,8 +247,9 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
         if (cancelled) return;
         // Sort ascending by start time so the grid + earliest-available read
         // chronologically.
-        const sorted = [...resp.data].sort((a, b) => a.startAt.localeCompare(b.startAt));
+        const sorted = [...resp.data.slots].sort((a, b) => a.startAt.localeCompare(b.startAt));
         setSlots(sorted);
+        setEmptyReason(resp.data.emptyReasons?.[0] ?? null);
       } catch (err) {
         if (!cancelled) setSlotsError(getApiErrorMessage(err, 'Could not load slots.'));
       } finally {
@@ -298,9 +416,13 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
             ))}
           </div>
         ) : visibleSlots.length === 0 ? (
-          <div className="p-4 text-center text-[13px] text-ink-3 border border-line rounded-[10px] bg-surface">
-            No openings for this combination. Try a different date or service.
-          </div>
+          <EmptyState
+            reason={emptyReason}
+            consultantSelected={Boolean(consultantId)}
+            serviceName={
+              timeslotTypes.find((t) => t.id === timeslotTypeId)?.name ?? null
+            }
+          />
         ) : (
           <div className="grid grid-cols-3 gap-1.5">
             {visibleSlots.map((s) => (
@@ -319,5 +441,48 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
         )}
       </div>
     </PhoneFrame>
+  );
+}
+
+function EmptyState({
+  reason,
+  consultantSelected,
+  serviceName,
+}: {
+  reason: EmptyReason | null;
+  consultantSelected: boolean;
+  serviceName: string | null;
+}) {
+  // No reason from the backend (e.g. an older deployment, or a partial
+  // network error) — fall back to the previous generic copy so the screen
+  // never looks broken.
+  if (!reason) {
+    return (
+      <div className="p-4 text-center text-[13px] text-ink-3 border border-line rounded-[10px] bg-surface">
+        No openings for this combination. Try a different date or service.
+      </div>
+    );
+  }
+
+  const copy = describeEmptyReason(reason, { consultantSelected, serviceName });
+  const tint = copy.tone === 'coral' ? 'var(--coral-tint)' : 'var(--amber-tint)';
+  const border =
+    copy.tone === 'coral'
+      ? 'color-mix(in oklab, var(--coral) 30%, transparent)'
+      : 'color-mix(in oklab, var(--amber) 30%, transparent)';
+  const iconColor = copy.tone === 'coral' ? 'text-coral' : 'text-amber';
+
+  return (
+    <div
+      className="p-4 rounded-[10px] flex items-start gap-2.5"
+      style={{ background: tint, border: `1px solid ${border}` }}
+      role="status"
+    >
+      <Icon name="alert" size={14} className={`${iconColor} mt-[2px] flex-none`} />
+      <div className="flex-1 text-[12.5px] leading-relaxed">
+        <div className="font-semibold">{copy.title}</div>
+        <div className="text-ink-2 mt-0.5">{copy.body}</div>
+      </div>
+    </div>
   );
 }
