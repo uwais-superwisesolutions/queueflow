@@ -11,6 +11,7 @@ export * from './bookingTypes';
 export * from './sessionTypes';
 export * from './portalLinkTypes';
 export * from './notificationTypes';
+export * from './aiBookingTypes';
 
 export type Tone = 'neutral' | 'teal' | 'amber' | 'blue' | 'coral' | 'success';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost' | 'outline' | 'teal-tint';

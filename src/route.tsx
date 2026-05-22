@@ -29,6 +29,7 @@ const ClientOTPScreen         = lazy(() => import('@/views/client/otp').then(m =
 const ClientNewDetailsScreen  = lazy(() => import('@/views/client/new-details').then(m => ({ default: m.ClientNewDetailsScreen })))
 const ClientReturningScreen   = lazy(() => import('@/views/client/returning').then(m => ({ default: m.ClientReturningScreen })))
 const ClientSlotPickerScreen  = lazy(() => import('@/views/client/slot-picker').then(m => ({ default: m.ClientSlotPickerScreen })))
+const ClientAIBookingScreen  = lazy(() => import('@/views/client/ai-booking').then(m => ({ default: m.ClientAIBookingScreen })))
 const ClientConfirmationScreen = lazy(() => import('@/views/client/confirmation').then(m => ({ default: m.ClientConfirmationScreen })))
 const ClientStatusScreen      = lazy(() => import('@/views/client/status').then(m => ({ default: m.ClientStatusScreen })))
 const ClientRejectionScreen   = lazy(() => import('@/views/client/rejection').then(m => ({ default: m.ClientRejectionScreen })))
@@ -168,6 +169,22 @@ function ClientSlotPickerRoute() {
         navigate('/client/confirm', { state: { slot: sel.slot, clientReason } })
       }
       onBack={() => navigate('/client')}
+      onTryAI={() => navigate('/client/ai', { state: { clientReason } })}
+    />
+  )
+}
+function ClientAIBookingRoute() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const clientReason =
+    (location.state as { clientReason?: string | null } | null)?.clientReason ?? null
+  return (
+    <ClientAIBookingScreen
+      onConfirmProposal={(slot) =>
+        navigate('/client/confirm', { state: { slot, clientReason } })
+      }
+      onOpenManualPicker={() => navigate('/client/slots', { state: { clientReason } })}
+      onBack={() => navigate('/client/slots', { state: { clientReason } })}
     />
   )
 }
@@ -276,6 +293,7 @@ const router = createBrowserRouter([
       { path: '/client/details',    element: wrap(<ClientNewDetailsRoute />) },
       { path: '/client/returning',  element: wrap(<ClientReturningRoute />) },
       { path: '/client/slots',      element: wrap(<ClientSlotPickerRoute />) },
+      { path: '/client/ai',         element: wrap(<ClientAIBookingRoute />) },
       { path: '/client/confirm',    element: wrap(<ClientConfirmationRoute />) },
       { path: '/client/status',     element: wrap(<ClientStatusRoute />) },
       { path: '/client/rejected',   element: wrap(<ClientRejectionRoute />) },

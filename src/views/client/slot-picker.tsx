@@ -6,6 +6,7 @@ import { searchSlots } from '@/services/slotApi';
 import { listClientConsultants, listClientTimeslotTypes } from '@/services/clientApi';
 import { fmtTime, durationMinutes } from '@/lib/date';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { describeEmptyReason } from '@/lib/empty-reason';
 import type {
   ClientConsultantResponse,
   EmptyReason,
@@ -23,6 +24,8 @@ export interface SlotSelection {
 interface ClientSlotPickerScreenProps {
   onSelect: (sel: SlotSelection) => void;
   onBack: () => void;
+  /** Optional — when set, renders a "Try AI booking" banner above the filter card. */
+  onTryAI?: () => void;
 }
 
 const ANY_CONSULTANT = '';
@@ -36,118 +39,7 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function fmtFriendlyDate(isoDateString: string): string {
-  // YYYY-MM-DD → "22 May 2026" using the user's locale ordering.
-  const [y, m, d] = isoDateString.split('-').map(Number);
-  if (!y || !m || !d) return isoDateString;
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-interface EmptyCopy {
-  tone: 'coral' | 'amber';
-  title: string;
-  body: string;
-}
-
-/**
- * Maps an EmptyReason into rendered copy. When the consultant filter is
- * "Anyone" we soften the message — naming a specific consultant doesn't
- * make sense when the user explicitly asked the system to pick. For all
- * other reasons we use the first-name from the backend (which only ever
- * sends a first name, never a full name or exception detail).
- */
-function describeEmptyReason(
-  reason: EmptyReason,
-  options: { consultantSelected: boolean; serviceName: string | null },
-): EmptyCopy {
-  const dateLabel = fmtFriendlyDate(reason.date);
-  const name = reason.orgMemberFirstName ?? 'Your consultant';
-  const service = options.serviceName ?? 'this service';
-
-  if (reason.reason === 'past') {
-    return {
-      tone: 'coral',
-      title: 'Date is in the past',
-      body: 'Pick today or a future date.',
-    };
-  }
-
-  if (reason.reason === 'public_holiday') {
-    return {
-      tone: 'amber',
-      title: 'Public holiday',
-      body: `Closed for the public holiday on ${dateLabel}.`,
-    };
-  }
-
-  // For Anyone mode, the reason rolled up across all eligible consultants —
-  // naming one of them is misleading. Use a generic message.
-  if (!options.consultantSelected) {
-    if (reason.reason === 'no_eligible_members') {
-      return {
-        tone: 'amber',
-        title: 'No consultants offer this yet',
-        body: `${service} isn't offered by any consultant right now.`,
-      };
-    }
-    return {
-      tone: 'amber',
-      title: 'No openings',
-      body: `No consultants are available for ${service} on ${dateLabel}. Try a different date.`,
-    };
-  }
-
-  switch (reason.reason) {
-    case 'service_not_offered':
-      return {
-        tone: 'coral',
-        title: `${name} doesn't offer ${service}`,
-        body: `${name} doesn't offer ${service}. Pick another consultant or a different service.`,
-      };
-    case 'blocked':
-      return {
-        tone: 'coral',
-        title: `${name} is unavailable`,
-        body: `${name} isn't available on ${dateLabel}. Try a different date or pick another consultant.`,
-      };
-    case 'off_today':
-      return {
-        tone: 'amber',
-        title: `${name} isn't working`,
-        body: `${name} isn't working on ${dateLabel}. Try a different date or pick another consultant.`,
-      };
-    case 'service_too_long':
-      return {
-        tone: 'coral',
-        title: "Service doesn't fit",
-        body: `${name}'s working hours on ${dateLabel} are too short for a ${service} (${reason.detail ?? 'long appointment'}).`,
-      };
-    case 'fully_booked':
-      return {
-        tone: 'amber',
-        title: `${name} is fully booked`,
-        body: `${name} is fully booked on ${dateLabel}. Try a different date or pick another consultant.`,
-      };
-    case 'no_eligible_members':
-      return {
-        tone: 'amber',
-        title: 'No consultants',
-        body: `${service} isn't offered by any consultant right now.`,
-      };
-    default:
-      return {
-        tone: 'amber',
-        title: 'No openings',
-        body: 'Try a different date or service.',
-      };
-  }
-}
-
-export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScreenProps) {
+export function ClientSlotPickerScreen({ onSelect, onBack, onTryAI }: ClientSlotPickerScreenProps) {
   const today = useMemo(() => isoDate(new Date()), []);
   const horizonMax = useMemo(() => {
     const d = new Date();
@@ -320,6 +212,22 @@ export function ClientSlotPickerScreen({ onSelect, onBack }: ClientSlotPickerScr
         <p className="m-0 mb-[18px] text-ink-3 text-[13.5px]">
           Pick a date and the kind of appointment — open slots appear below.
         </p>
+
+        {onTryAI && (
+          <button
+            type="button"
+            onClick={onTryAI}
+            className="w-full text-left border border-teal rounded-[12px] bg-teal-tint text-teal-ink px-3.5 py-3 mb-3 cursor-pointer transition hover:opacity-90"
+          >
+            <div className="flex items-center gap-2 text-[13.5px] font-medium">
+              <Icon name="sparkles" size={14} />
+              Try AI booking
+            </div>
+            <div className="text-[12px] mt-0.5" style={{ color: 'color-mix(in oklab, var(--teal-ink) 80%, transparent)' }}>
+              e.g. &ldquo;Consult next Tuesday afternoon with Sarah&rdquo;
+            </div>
+          </button>
+        )}
 
         {/* Filter card */}
         <div className="border border-line rounded-[12px] bg-surface p-3.5 mb-3.5 flex flex-col gap-2.5">
