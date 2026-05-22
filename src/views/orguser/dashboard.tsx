@@ -98,7 +98,46 @@ export function OrgUserDashboard({ initialPage = 'queue', onSignOut, onClaimSeat
           />
         }
       />
-      <main className="flex-1 min-w-0 flex flex-col">
+      <main className="flex-1 min-w-0 flex flex-col relative">
+        {/*
+          The live-queue screen renders its own header with seat info, End
+          shift, and a profile menu. Every other sub-view uses a plain TopBar
+          with no profile menu, so we float one in the top-right of <main>
+          for those screens only. Hidden on mobile because the Sidebar
+          already shows a mobileFooter ProfileMenu in that breakpoint.
+        */}
+        {active !== 'queue' && (
+          <div
+            className="hidden md:block absolute top-3 right-4 z-20"
+            style={{ width: 220 }}
+          >
+            <ProfileMenu
+              fullName={fullName ?? ''}
+              email={email}
+              role={role}
+              direction="down"
+              items={[
+                ...(role === 'super_user' && onPersona
+                  ? [
+                      {
+                        id: 'persona',
+                        label: 'Switch to super user view',
+                        icon: 'refresh' as const,
+                        onSelect: () => onPersona('superuser-dash'),
+                      },
+                    ]
+                  : []),
+                {
+                  id: 'logout',
+                  label: 'Sign out',
+                  icon: 'logout' as const,
+                  tone: 'danger' as const,
+                  onSelect: handleSignOut,
+                },
+              ]}
+            />
+          </div>
+        )}
         {active === 'queue' && (
           <OrgUserQueueScreen
             onShiftEnded={() => onClaimSeat?.()}
