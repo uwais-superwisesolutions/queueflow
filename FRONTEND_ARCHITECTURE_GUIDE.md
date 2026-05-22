@@ -33,7 +33,7 @@ Core goals:
 - HTTP: **Axios** with centralized interceptor (`src/services/interceptor.ts`)
 - State:
   - **Local React state** for most screen interaction
-  - **Zustand** is installed but not currently used; reach for it first if a small app-wide store is needed
+  - **Zustand** for session-wide auth/profile state (`src/stores/authStore.ts`, `src/stores/clientAuthStore.ts`)
 - Utilities: `clsx` + `tailwind-merge` through `cn(...)` (`src/lib/utils.ts`)
 
 ---
@@ -45,10 +45,12 @@ Core goals:
 The app bootstraps in this order (`src/main.tsx`):
 
 1. React root + `StrictMode`
-2. React Router `RouterProvider`
-3. Global stylesheet import (`src/index.css`)
+2. Invite/recovery callback normalization before the router mounts
+3. Global UI providers, currently `ConfirmProvider`
+4. React Router `RouterProvider`
+5. Global stylesheet import (`src/index.css`)
 
-The router is the application root — there is no top-level `App` component. If a future global provider is needed (theme, auth, store), wrap it around `<RouterProvider />` in `src/main.tsx`.
+The router is the application root — there is no top-level `App` component. If another global provider is needed (theme, auth, query cache, etc.), wrap it around `<RouterProvider />` in `src/main.tsx`.
 
 ### 3.2 Route + Screen Flow
 
@@ -66,9 +68,9 @@ User action
 
 Route wrappers adapt router behavior into screen props. Feature screens receive callbacks like `onSubmit`, `onBack`, `onContinue`, and `onOpenClientPortal` instead of importing router hooks everywhere.
 
-### 3.3 Future Request Flow
+### 3.3 Request Flow
 
-When API integration is added, use this flow:
+Use this flow for API-backed behavior:
 
 ```text
 View/Component
@@ -79,7 +81,7 @@ View/Component
         -> failure: interceptor handles auth failures; caller handles local UI state
 ```
 
-Do not call `axios` directly from views.
+Do not call `axios` directly from views. Views should call service functions.
 
 ---
 
@@ -120,10 +122,10 @@ Rules:
 - Use `Navigate` for catch-all fallback routes
 
 Current route groups:
-- Marketing/auth: `/`, `/signup`, `/login`, `/accept-invite`
+- Marketing/auth: `/`, `/signup`, `/login`, `/accept-invite`, `/reset-password`
 - Onboarding: `/onboarding`
 - Super user dashboard: `/dashboard/*`
-- Org user workflows: `/claim`, `/queue`, `/availability`
+- Org user workflows: `/org`, `/claim`, `/queue`, `/availability`, `/timeconfig`, `/notifications`, `/profile`
 - Client portal: `/client/*`
 - System/design screens: `/system/*`
 
@@ -131,6 +133,9 @@ Do not:
 - Create ad-hoc route arrays in feature folders
 - Import `useNavigate` into every screen when a route wrapper can pass a callback
 - Duplicate fallback routes outside the central router
+
+Current debt:
+- `SuperUserDashboard` and `OrgUserDashboard` still own some tab/sidebar navigation directly. Keep new navigation in route wrappers when practical, and move existing screen-level navigation outward when those files are next refactored.
 
 ---
 
@@ -140,17 +145,30 @@ Do not:
 
 There are no route guards yet. All `AppLayout` routes are currently accessible if the URL is known.
 
-The Axios interceptor reads a token from `localStorage`:
+Session state is split by audience:
 
-```typescript
-const token = localStorage.getItem('token')
-```
+- `src/stores/authStore.ts` stores org-user/super-user profile state and manages:
+  - `token`
+  - `refresh_token`
+  - persisted profile metadata under `auth`
+- `src/stores/clientAuthStore.ts` stores client-portal session state and manages:
+  - `client_token`
+  - persisted client metadata under `client_auth`
 
-If an API response returns `401`, it removes the token and redirects to `/login`.
+The Axios interceptor decides which token to attach:
+
+- Org/admin routes use `token`
+- Client portal routes use `client_token`
+- Public client routes, such as OTP request/confirm and portal scan, send no token
+
+If an org API response returns `401`, the interceptor attempts one refresh using `refresh_token`. If refresh fails, it clears org tokens and redirects to `/login`.
+
+If an authenticated client API response returns `401`, it clears the client token and redirects to `/client`.
 
 ### 6.2 Expected Auth Direction
 
-When backend auth is connected:
+Auth is connected, but route protection is still incomplete. Next auth work should:
+
 - Keep token attachment and `401` redirect behavior in `src/services/interceptor.ts`
 - Add route-level guards instead of checking auth inside every view
 - Store only session-wide auth/profile data globally
@@ -173,26 +191,43 @@ Do not scatter `localStorage.getItem('token')` checks through screens.
 
 ## 7) API and Service Layer Conventions
 
-All API calls must go through `src/services/` and use the shared Axios instance from `src/services/interceptor.ts`.
+API calls must go through `src/services/`. Most service calls should use the shared Axios instance from `src/services/interceptor.ts`.
+
+Allowed raw-Axios exceptions:
+- Token refresh calls that must not pass through the retry interceptor
+- Pre-auth calls where no bearer token exists and the endpoint should not trigger auth redirect behavior
+
+Document the reason inline when using raw Axios in a service. Do not use raw Axios from views.
 
 ### 7.1 Current Interceptor Responsibilities
 
 `src/services/interceptor.ts` currently:
 - sets `baseURL` from `import.meta.env.VITE_API_BASE_URL`
 - sends JSON by default
-- attaches `Authorization: Bearer {token}` from `localStorage`
-- clears the token and redirects to `/login` on `401`
+- attaches the correct `Authorization: Bearer ...` token for org or client API routes
+- skips auth for public client endpoints
+- coordinates a single in-flight org refresh when multiple requests return `401`
+- clears the relevant token and redirects to `/login` or `/client` on unrecoverable `401`
 - rejects errors upward for the caller to handle
 
 ### 7.2 Service Rules
 
 Use one service file per API area:
-- `queueApi.ts`
-- `bookingApi.ts`
-- `organizationApi.ts`
+- `queueBookingApi.ts`
+- `clientBookingApi.ts`
+- `organisationApi.ts`
 - `seatApi.ts`
-- `timeslotApi.ts`
+- `timeslotTypeApi.ts`
 - `authApi.ts`
+- `clientAuthApi.ts`
+- `availabilityApi.ts`
+- `departmentApi.ts`
+- `meApi.ts`
+- `notificationApi.ts`
+- `portalLinkApi.ts`
+- `publicHolidayApi.ts`
+- `sessionApi.ts`
+- `slotApi.ts`
 
 Export explicit functions. Avoid class-based clients for now.
 
@@ -235,6 +270,8 @@ try {
 
 If backend error shapes become inconsistent, add a shared `src/lib/api-error.ts` helper instead of parsing error shapes inline in every view.
 
+`src/lib/api-error.ts` now exists. Use `getApiErrorMessage(...)` for user-facing inline error messages instead of duplicating backend error parsing in screens.
+
 ---
 
 ## 8) State Management Strategy
@@ -246,10 +283,13 @@ Use the lightest state mechanism that satisfies the scope.
 2. **Custom hooks**
    - Reusable behavior with lifecycle concerns, such as timers (`src/hooks/use-tick.ts`)
 3. **Zustand**
-   - Installed but not yet wired in. Use it for cross-screen workflows or structured app state that several screens edit (auth/profile, active organization, sidebar collapse, etc.)
+   - Use for cross-screen workflows or structured app state that several screens edit.
+   - Current stores:
+     - `src/stores/authStore.ts` for org/super-user session state
+     - `src/stores/clientAuthStore.ts` for client portal session state
 
-Zustand rules when adding the first store:
-1. Create `src/stores/` and add a store file per concern, e.g. `src/stores/auth-store.ts`
+Zustand rules:
+1. Add one store file per concern under `src/stores/`
 2. Export a typed `useXStore` hook from the file, plus narrow selector hooks where helpful
 3. Keep transient page state (form drafts, modal open flags) out of global stores
 4. Never read or write `localStorage` from views — encapsulate that inside the store or service layer
@@ -258,29 +298,39 @@ Zustand rules when adding the first store:
 
 ## 9) Types and Data Contracts
 
-Shared contracts live in `src/types/index.ts`.
+Shared contracts live in `src/types/`. Feature-specific contracts are split into files and re-exported through `src/types/index.ts`.
 
 Current type groups include:
 - UI type unions: `Tone`, `ButtonVariant`, `ButtonSize`, `IconName`
-- Queue domain types: `Booking`, `BookingStatus`, `QueueState`, `DailyStats`
-- Organization types: `Department`, `Seat`, `OrgUser`, `TimeslotType`
+- Auth contracts: `AuthResponse`, `LoginPayload`, `SignUpPayload`, `MemberRole`
+- Queue/booking contracts: `BookingResponse`, `BookingStatus`, `QueueResponse`
+- Organization contracts: `OrganisationResponse`, `DepartmentResponse`, `SeatResponse`, `MemberResponse`, `TimeslotTypeResponse`
 - Navigation types: `NavItem`, `SidebarNavItem`
 - Client portal and analytics types
 
 Rules:
 - Avoid `any` in new code
 - Prefer named interfaces for API payloads and domain entities
-- Keep UI-only unions near the UI components that depend on them only if `types/index.ts` grows too large
-- Split `src/types/index.ts` into feature files once it becomes hard to scan
+- Keep feature contracts in the matching `*Types.ts` file
+- Re-export public shared types from `src/types/index.ts`
 
-Suggested future split:
+Current split:
 
 ```text
 src/types/
-  queueTypes.ts
-  organizationTypes.ts
+  authTypes.ts
+  availabilityTypes.ts
+  bookingTypes.ts
   clientTypes.ts
-  uiTypes.ts
+  departmentTypes.ts
+  notificationTypes.ts
+  organisationTypes.ts
+  portalLinkTypes.ts
+  publicHolidayTypes.ts
+  seatTypes.ts
+  sessionTypes.ts
+  slotTypes.ts
+  timeslotTypeTypes.ts
   index.ts
 ```
 
@@ -443,7 +493,7 @@ If a helper becomes reusable across feature groups, move it to `src/components/`
 
 ### 12.1 Current State
 
-Most screens currently render local mock data. Treat this as prototype data, not a final architecture.
+Most operational screens are API-backed. Some design-system, marketing, or prototype-only views may still contain local demo data.
 
 When replacing mock data:
 - Keep the UI component shape stable
@@ -576,4 +626,3 @@ Default decision rule:
 - If code is only useful to one screen, keep it near that screen
 - If code is reused by multiple feature groups, promote it to `components`, `hooks`, `lib`, or `types`
 - If behavior crosses routes or sessions, add a Zustand store under `src/stores/` (created on demand — the folder is intentionally absent until needed)
-
