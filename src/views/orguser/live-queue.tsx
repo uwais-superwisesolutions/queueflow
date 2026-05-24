@@ -49,7 +49,7 @@ import type {
   SeatResponse,
   TimeslotTypeResponse,
 } from '@/types';
-import { fmtTime, minutesSince } from '@/lib/date';
+import { fmtTime, minutesSince, todayInTz } from '@/lib/date';
 
 interface OrgUserQueueScreenProps {
   /** Called when "End shift" succeeds — route wrapper sends user to /claim. */
@@ -123,6 +123,18 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
     for (const t of timeslotTypes) m.set(t.id, t);
     return m;
   }, [timeslotTypes]);
+
+  // "Scheduled today" should mean what it says. The backend returns every
+  // active scheduled booking regardless of date (it's the same endpoint the
+  // SU dashboard uses for the org-wide queue), so we filter on render.
+  // `todayInTz()` gives YYYY-MM-DD in the browser locale, which lines up with
+  // the org user's working day for any in-clinic device.
+  const scheduledToday = useMemo(() => {
+    const today = todayInTz();
+    return queue.scheduled.filter(
+      (b) => new Date(b.scheduledStartAt).toLocaleDateString('en-CA') === today,
+    );
+  }, [queue.scheduled]);
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -231,7 +243,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
 
   const handleEndShift = async () => {
     const stillInQueue =
-      queue.checkedIn.length + queue.scheduled.length + queue.pendingApproval.length;
+      queue.checkedIn.length + scheduledToday.length + queue.pendingApproval.length;
     if (stillInQueue > 0) {
       const ok = await confirm({
         title: 'End your shift?',
@@ -259,9 +271,12 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
     onSignOut?.();
   };
 
+  // "Active" badge mirrors the visible sections — pending + today's scheduled
+  // + checked-in + in-service. Future-day scheduled bookings stay out of the
+  // count so the badge agrees with what's rendered.
   const totalInQueue =
     queue.pendingApproval.length +
-    queue.scheduled.length +
+    scheduledToday.length +
     queue.checkedIn.length +
     queue.inService.length;
 
@@ -484,11 +499,11 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
             <QueueSection
               title="Scheduled today"
               subtitle="Upcoming, not yet checked in."
-              count={queue.scheduled.length}
+              count={scheduledToday.length}
               accent="neutral"
               empty="No upcoming bookings today."
             >
-              {queue.scheduled.map((b) => (
+              {scheduledToday.map((b) => (
                 <BookingRow
                   key={b.id}
                   booking={b}
