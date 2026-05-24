@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Field, TextInput } from '@/components/ui';
 import { AuthCard } from './landing';
 import { forgotPassword, login } from '@/services/authApi';
-import { getOrganisation } from '@/services/organisationApi';
+import { getOrganisation, updateBranding } from '@/services/organisationApi';
 import { useAuthStore } from '@/stores/authStore';
 import { getApiErrorMessage } from '@/lib/api-error';
 import type { MemberRole } from '@/types';
@@ -60,6 +60,30 @@ export function LoginScreen({ onSubmit, onSignUp }: LoginScreenProps) {
           const orgResp = await getOrganisation();
           onboardingComplete = orgResp.data.onboardingComplete;
           setOnboardingComplete(onboardingComplete);
+
+          // Silent timezone backfill: orgs that existed before the timezone
+          // column landed default to "UTC". If the SU logs in from a real
+          // (non-UTC) browser, adopt their timezone as the org's default so
+          // availability + slots line up without anyone having to find
+          // Settings. SU-only — regular org users can't PATCH branding.
+          // Skips on signal mismatch (browser also UTC, role !== super_user,
+          // or org already configured).
+          try {
+            const browserTz =
+              typeof Intl !== 'undefined'
+                ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                : null;
+            if (
+              loginResp.data.role === 'super_user' &&
+              orgResp.data.timezone === 'UTC' &&
+              browserTz &&
+              browserTz !== 'UTC'
+            ) {
+              await updateBranding({ timezone: browserTz });
+            }
+          } catch {
+            // Best-effort — never block login on a tz backfill failure.
+          }
         } catch {
           // If the org call fails for any reason, fall through with onboardingComplete=false
           // so the user lands on the wizard rather than a broken dashboard.
