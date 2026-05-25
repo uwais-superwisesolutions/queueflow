@@ -421,6 +421,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
                   key={b.id}
                   booking={b}
                   timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  extras={resolveExtras(b, ttById)}
                   disabled={actingId === b.id}
                   onApprove={() => handleApprove(b)}
                   onReject={() => setRejectingId(b.id)}
@@ -440,6 +441,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
                   key={b.id}
                   booking={b}
                   timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  extras={resolveExtras(b, ttById)}
                   disabled={actingId === b.id}
                   onComplete={() => handleComplete(b)}
                   onNoShow={() => handleNoShow(b)}
@@ -475,6 +477,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
                     key={b.id}
                     booking={b}
                     timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                    extras={resolveExtras(b, ttById)}
                     accent="teal"
                     position={idx + 1}
                     waitingLabel={waitingLabel}
@@ -508,6 +511,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
                   key={b.id}
                   booking={b}
                   timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  extras={resolveExtras(b, ttById)}
                   accent="neutral"
                   lateStart={isLate(b)}
                   disabled={actingId === b.id}
@@ -724,15 +728,26 @@ function QueueSection({
   );
 }
 
+function resolveExtras(
+  booking: BookingResponse,
+  ttById: Map<string, TimeslotTypeResponse>,
+): TimeslotTypeResponse[] {
+  return (booking.additionalTimeslotTypeIds ?? [])
+    .map((id) => ttById.get(id))
+    .filter((t): t is TimeslotTypeResponse => !!t);
+}
+
 function PendingCard({
   booking,
   timeslot,
+  extras,
   onApprove,
   onReject,
   disabled,
 }: {
   booking: BookingResponse;
   timeslot?: TimeslotTypeResponse;
+  extras?: TimeslotTypeResponse[];
   onApprove: () => void;
   onReject: () => void;
   disabled?: boolean;
@@ -741,6 +756,9 @@ function PendingCard({
     ? Math.max(0, new Date(booking.heldUntil).getTime() - Date.now())
     : 0;
   const label = clientLabel(booking);
+  const services = timeslot ? [timeslot, ...(extras ?? [])] : [];
+  const serviceNames = services.map((t) => t.name).join(' + ');
+  const totalMinutes = services.reduce((sum, t) => sum + t.durationMinutes, 0);
   return (
     <div className="px-4 py-3 border-b border-line last:border-b-0 flex flex-col sm:flex-row sm:items-center gap-3">
       <Avatar name={label} size={36} />
@@ -759,7 +777,7 @@ function PendingCard({
                 className="inline-block rounded-full flex-none"
                 style={{ width: 7, height: 7, background: timeslot.color ?? 'var(--ink-3)' }}
               />
-              {timeslot.name} · {timeslot.durationMinutes} min
+              {serviceNames} · {totalMinutes} min
             </span>
           )}
           {timeslot && <span className="text-ink-4">·</span>}
@@ -795,12 +813,14 @@ function PendingCard({
 function InServiceCard({
   booking,
   timeslot,
+  extras,
   onComplete,
   onNoShow,
   disabled,
 }: {
   booking: BookingResponse;
   timeslot?: TimeslotTypeResponse;
+  extras?: TimeslotTypeResponse[];
   onComplete: () => void;
   onNoShow: () => void;
   disabled?: boolean;
@@ -815,6 +835,9 @@ function InServiceCard({
   const remainingSec = Math.max(0, scheduledDurationSec - elapsedSec);
   const remainingMin = Math.ceil(remainingSec / 60);
   const overTime = elapsedSec > scheduledDurationSec;
+  const services = timeslot ? [timeslot, ...(extras ?? [])] : [];
+  const serviceNames = services.map((t) => t.name).join(' + ');
+  const totalMinutes = services.reduce((sum, t) => sum + t.durationMinutes, 0);
 
   return (
     <div
@@ -837,7 +860,7 @@ function InServiceCard({
                 className="inline-block rounded-full flex-none"
                 style={{ width: 7, height: 7, background: timeslot.color ?? 'var(--ink-3)' }}
               />
-              {timeslot.name} · {timeslot.durationMinutes} min scheduled
+              {serviceNames} · {totalMinutes} min scheduled
             </span>
           )}
           <span className="text-ink-4">·</span>
@@ -882,6 +905,7 @@ function InServiceCard({
 function BookingRow({
   booking,
   timeslot,
+  extras,
   accent,
   position,
   waitingLabel,
@@ -892,6 +916,7 @@ function BookingRow({
 }: {
   booking: BookingResponse;
   timeslot?: TimeslotTypeResponse;
+  extras?: TimeslotTypeResponse[];
   accent: 'teal' | 'neutral';
   position?: number;
   waitingLabel?: string;
@@ -904,6 +929,9 @@ function BookingRow({
   disabled?: boolean;
 }) {
   const label = clientLabel(booking);
+  const serviceNames = timeslot
+    ? [timeslot, ...(extras ?? [])].map((t) => t.name).join(' + ')
+    : '';
   return (
     <div
       className={cn(
@@ -937,7 +965,7 @@ function BookingRow({
                 className="inline-block rounded-full flex-none"
                 style={{ width: 6, height: 6, background: timeslot.color ?? 'var(--ink-3)' }}
               />
-              {timeslot.name}
+              {serviceNames}
             </span>
           )}
           <span className="text-ink-4">·</span>
