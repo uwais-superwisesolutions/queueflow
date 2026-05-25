@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useState } from 'react';
-import { Button, Card, Field, Icon, Modal, TextInput, useConfirm } from '@/components/ui';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Card, Field, Icon, Modal, SelectInput, TextInput, useConfirm } from '@/components/ui';
 import { fmtDate } from '@/lib/date';
 import { TopBar } from '@/components/layout';
 import type { OrganisationResponse, PublicHolidayResponse } from '@/types';
@@ -36,11 +36,31 @@ function BrandingSection() {
   const [industry, setIndustry] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [brandColor, setBrandColor] = useState('');
+  const [timezone, setTimezone] = useState('UTC');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const setOrganisationName = useAuthStore((s) => s.setOrganisationName);
+
+  // Build the timezone option list once. `Intl.supportedValuesOf` is the
+  // canonical API but isn't on every runtime — fall back to a short list
+  // covering the main regions if not present.
+  const timezoneOptions = useMemo<string[]>(() => {
+    const supported =
+      (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
+    if (typeof supported === 'function') {
+      try { return supported('timeZone'); } catch { /* fall through */ }
+    }
+    return [
+      'UTC',
+      'Africa/Johannesburg', 'Africa/Cairo', 'Africa/Lagos',
+      'Europe/London', 'Europe/Berlin', 'Europe/Paris',
+      'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+      'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo',
+      'Australia/Sydney',
+    ];
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -51,6 +71,7 @@ function BrandingSection() {
         setIndustry(resp.data.industry ?? '');
         setLogoUrl(resp.data.logoUrl ?? '');
         setBrandColor(resp.data.brandColor ?? '');
+        setTimezone(resp.data.timezone || 'UTC');
         setOrganisationName(resp.data.name);
       } catch (err) {
         setError(getApiErrorMessage(err, 'Could not load organisation.'));
@@ -69,6 +90,7 @@ function BrandingSection() {
         industry: industry || '',
         logoUrl: logoUrl || '',
         brandColor: brandColor || '',
+        timezone: timezone || 'UTC',
       });
       setOrg(resp.data);
       setSaved(true);
@@ -135,6 +157,17 @@ function BrandingSection() {
                   />
                 </label>
               </div>
+            </Field>
+            <div className="h-3" />
+            <Field
+              label="Timezone"
+              hint="Availability hours are interpreted in this zone. Clients still see slots in their own local time."
+            >
+              <SelectInput
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                options={timezoneOptions}
+              />
             </Field>
             <div className="flex flex-wrap items-center mt-4 gap-3">
               {saved && (

@@ -7,6 +7,13 @@ export interface SignUpPayload {
   lastName: string;
   orgName: string;
   industry?: string | null;
+  /**
+   * IANA timezone name auto-detected from the browser
+   * (Intl.DateTimeFormat().resolvedOptions().timeZone). Stored on the new
+   * organisation so availability is interpreted in the right zone from
+   * day 1. SU can override later in Settings.
+   */
+  timezone?: string | null;
 }
 
 export interface LoginPayload {

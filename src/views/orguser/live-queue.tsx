@@ -39,6 +39,7 @@ import {
   endShift,
   getMySeatAssignment,
   heartbeat,
+  pushDelay,
 } from '@/services/sessionApi';
 import type {
   BookingResponse,
@@ -48,7 +49,7 @@ import type {
   SeatResponse,
   TimeslotTypeResponse,
 } from '@/types';
-import { fmtTime, minutesSince } from '@/lib/date';
+import { fmtTime, minutesSince, todayInTz } from '@/lib/date';
 
 interface OrgUserQueueScreenProps {
   /** Called when "End shift" succeeds — route wrapper sends user to /claim. */
@@ -109,6 +110,9 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number>(0);
+  // Manual delay push modal
+  const [delayModalOpen, setDelayModalOpen] = useState(false);
+  const [delayToast, setDelayToast] = useState<string | null>(null);
   const confirm = useConfirm();
 
   // Live elapsed-time tick for the "In service" timer.
@@ -119,6 +123,18 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
     for (const t of timeslotTypes) m.set(t.id, t);
     return m;
   }, [timeslotTypes]);
+
+  // "Scheduled today" should mean what it says. The backend returns every
+  // active scheduled booking regardless of date (it's the same endpoint the
+  // SU dashboard uses for the org-wide queue), so we filter on render.
+  // `todayInTz()` gives YYYY-MM-DD in the browser locale, which lines up with
+  // the org user's working day for any in-clinic device.
+  const scheduledToday = useMemo(() => {
+    const today = todayInTz();
+    return queue.scheduled.filter(
+      (b) => new Date(b.scheduledStartAt).toLocaleDateString('en-CA') === today,
+    );
+  }, [queue.scheduled]);
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -227,7 +243,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
 
   const handleEndShift = async () => {
     const stillInQueue =
-      queue.checkedIn.length + queue.scheduled.length + queue.pendingApproval.length;
+      queue.checkedIn.length + scheduledToday.length + queue.pendingApproval.length;
     if (stillInQueue > 0) {
       const ok = await confirm({
         title: 'End your shift?',
@@ -255,9 +271,12 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
     onSignOut?.();
   };
 
+  // "Active" badge mirrors the visible sections — pending + today's scheduled
+  // + checked-in + in-service. Future-day scheduled bookings stay out of the
+  // count so the badge agrees with what's rendered.
   const totalInQueue =
     queue.pendingApproval.length +
-    queue.scheduled.length +
+    scheduledToday.length +
     queue.checkedIn.length +
     queue.inService.length;
 
@@ -315,6 +334,13 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
           <span className="qf-live-dot" />
           {updatedAt ? `Updated ${agoLabel(Date.now() - updatedAt)}` : 'Live'}
         </span>
+        <Button
+          variant="secondary"
+          icon="clock"
+          onClick={() => setDelayModalOpen(true)}
+        >
+          Push delay
+        </Button>
         <Button
           variant="secondary"
           icon="logout"
@@ -395,6 +421,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
                   key={b.id}
                   booking={b}
                   timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  extras={resolveExtras(b, ttById)}
                   disabled={actingId === b.id}
                   onApprove={() => handleApprove(b)}
                   onReject={() => setRejectingId(b.id)}
@@ -414,6 +441,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
                   key={b.id}
                   booking={b}
                   timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  extras={resolveExtras(b, ttById)}
                   disabled={actingId === b.id}
                   onComplete={() => handleComplete(b)}
                   onNoShow={() => handleNoShow(b)}
@@ -449,6 +477,7 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
                     key={b.id}
                     booking={b}
                     timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                    extras={resolveExtras(b, ttById)}
                     accent="teal"
                     position={idx + 1}
                     waitingLabel={waitingLabel}
@@ -473,15 +502,16 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
             <QueueSection
               title="Scheduled today"
               subtitle="Upcoming, not yet checked in."
-              count={queue.scheduled.length}
+              count={scheduledToday.length}
               accent="neutral"
               empty="No upcoming bookings today."
             >
-              {queue.scheduled.map((b) => (
+              {scheduledToday.map((b) => (
                 <BookingRow
                   key={b.id}
                   booking={b}
                   timeslot={b.timeslotTypeId ? ttById.get(b.timeslotTypeId) : undefined}
+                  extras={resolveExtras(b, ttById)}
                   accent="neutral"
                   lateStart={isLate(b)}
                   disabled={actingId === b.id}
@@ -523,7 +553,124 @@ export function OrgUserQueueScreen({ onShiftEnded, onSignOut, onPersona }: OrgUs
           await handleReject(id, reason);
         }}
       />
+
+      <DelayPushModal
+        open={delayModalOpen}
+        onClose={() => setDelayModalOpen(false)}
+        onSubmit={async (minutes) => {
+          setActionError(null);
+          try {
+            const resp = await pushDelay(minutes);
+            setDelayModalOpen(false);
+            setDelayToast(
+              `Shifted ${resp.data.shifted} booking${resp.data.shifted === 1 ? '' : 's'} — clients notified.`,
+            );
+            window.setTimeout(() => setDelayToast(null), 4000);
+            await fetchQueue();
+          } catch (err) {
+            setActionError(getApiErrorMessage(err, 'Could not push delay.'));
+            setDelayModalOpen(false);
+          }
+        }}
+      />
+
+      {delayToast && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-[10px] border bg-surface px-3.5 py-2.5 shadow-md flex items-center gap-2 text-[12.5px]"
+          style={{
+            borderColor: 'color-mix(in oklab, var(--teal) 30%, transparent)',
+            background: 'var(--teal-tint)',
+            color: 'var(--teal-ink)',
+          }}
+        >
+          <Icon name="check" size={14} />
+          <span>{delayToast}</span>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Manual delay push modal
+// ─────────────────────────────────────────────────────────────────
+
+function DelayPushModal({
+  open,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (minutes: number) => Promise<void> | void;
+}) {
+  const [minutes, setMinutes] = useState(15);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setMinutes(15);
+      setSubmitting(false);
+      setError(null);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleSubmit = async () => {
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 240) {
+      setError('Enter a value between 1 and 240 minutes.');
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onSubmit(minutes);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Push a delay"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            icon="clock"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? 'Pushing…' : 'Push delay'}
+          </Button>
+        </>
+      }
+    >
+      <Field
+        label="Add this many minutes"
+        hint="Shifts every upcoming and checked-in booking forward. Each affected client gets an SMS."
+      >
+        <TextInput
+          type="number"
+          value={String(minutes)}
+          onChange={(e) => setMinutes(Math.max(0, Number(e.target.value) || 0))}
+          autoFocus
+        />
+      </Field>
+      {error && (
+        <div className="text-coral text-[12.5px] mt-2" role="alert">
+          {error}
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -581,15 +728,26 @@ function QueueSection({
   );
 }
 
+function resolveExtras(
+  booking: BookingResponse,
+  ttById: Map<string, TimeslotTypeResponse>,
+): TimeslotTypeResponse[] {
+  return (booking.additionalTimeslotTypeIds ?? [])
+    .map((id) => ttById.get(id))
+    .filter((t): t is TimeslotTypeResponse => !!t);
+}
+
 function PendingCard({
   booking,
   timeslot,
+  extras,
   onApprove,
   onReject,
   disabled,
 }: {
   booking: BookingResponse;
   timeslot?: TimeslotTypeResponse;
+  extras?: TimeslotTypeResponse[];
   onApprove: () => void;
   onReject: () => void;
   disabled?: boolean;
@@ -598,6 +756,9 @@ function PendingCard({
     ? Math.max(0, new Date(booking.heldUntil).getTime() - Date.now())
     : 0;
   const label = clientLabel(booking);
+  const services = timeslot ? [timeslot, ...(extras ?? [])] : [];
+  const serviceNames = services.map((t) => t.name).join(' + ');
+  const totalMinutes = services.reduce((sum, t) => sum + t.durationMinutes, 0);
   return (
     <div className="px-4 py-3 border-b border-line last:border-b-0 flex flex-col sm:flex-row sm:items-center gap-3">
       <Avatar name={label} size={36} />
@@ -616,7 +777,7 @@ function PendingCard({
                 className="inline-block rounded-full flex-none"
                 style={{ width: 7, height: 7, background: timeslot.color ?? 'var(--ink-3)' }}
               />
-              {timeslot.name} · {timeslot.durationMinutes} min
+              {serviceNames} · {totalMinutes} min
             </span>
           )}
           {timeslot && <span className="text-ink-4">·</span>}
@@ -652,12 +813,14 @@ function PendingCard({
 function InServiceCard({
   booking,
   timeslot,
+  extras,
   onComplete,
   onNoShow,
   disabled,
 }: {
   booking: BookingResponse;
   timeslot?: TimeslotTypeResponse;
+  extras?: TimeslotTypeResponse[];
   onComplete: () => void;
   onNoShow: () => void;
   disabled?: boolean;
@@ -672,6 +835,9 @@ function InServiceCard({
   const remainingSec = Math.max(0, scheduledDurationSec - elapsedSec);
   const remainingMin = Math.ceil(remainingSec / 60);
   const overTime = elapsedSec > scheduledDurationSec;
+  const services = timeslot ? [timeslot, ...(extras ?? [])] : [];
+  const serviceNames = services.map((t) => t.name).join(' + ');
+  const totalMinutes = services.reduce((sum, t) => sum + t.durationMinutes, 0);
 
   return (
     <div
@@ -694,7 +860,7 @@ function InServiceCard({
                 className="inline-block rounded-full flex-none"
                 style={{ width: 7, height: 7, background: timeslot.color ?? 'var(--ink-3)' }}
               />
-              {timeslot.name} · {timeslot.durationMinutes} min scheduled
+              {serviceNames} · {totalMinutes} min scheduled
             </span>
           )}
           <span className="text-ink-4">·</span>
@@ -739,6 +905,7 @@ function InServiceCard({
 function BookingRow({
   booking,
   timeslot,
+  extras,
   accent,
   position,
   waitingLabel,
@@ -749,6 +916,7 @@ function BookingRow({
 }: {
   booking: BookingResponse;
   timeslot?: TimeslotTypeResponse;
+  extras?: TimeslotTypeResponse[];
   accent: 'teal' | 'neutral';
   position?: number;
   waitingLabel?: string;
@@ -761,6 +929,9 @@ function BookingRow({
   disabled?: boolean;
 }) {
   const label = clientLabel(booking);
+  const serviceNames = timeslot
+    ? [timeslot, ...(extras ?? [])].map((t) => t.name).join(' + ')
+    : '';
   return (
     <div
       className={cn(
@@ -794,7 +965,7 @@ function BookingRow({
                 className="inline-block rounded-full flex-none"
                 style={{ width: 6, height: 6, background: timeslot.color ?? 'var(--ink-3)' }}
               />
-              {timeslot.name}
+              {serviceNames}
             </span>
           )}
           <span className="text-ink-4">·</span>

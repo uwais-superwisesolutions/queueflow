@@ -3,6 +3,12 @@ export interface SlotSearchQuery {
   to: string;
   orgMemberId?: string;
   timeslotTypeId?: string;
+  /**
+   * Optional extra services that must fit back-to-back inside each returned
+   * slot. The backend sums durations of (primary + extras) and only returns
+   * slots where one consultant has a continuous window covering the total.
+   */
+  additionalTimeslotTypeIds?: string[];
 }
 
 export interface SlotResponse {

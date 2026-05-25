@@ -28,6 +28,11 @@ export interface BookingResponse {
   clientReason: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Extra timeslot type ids stacked back-to-back on the same booking.
+   * Empty for single-service bookings (the common case).
+   */
+  additionalTimeslotTypeIds: string[];
 }
 
 export interface CreateBookingPayload {
@@ -41,6 +46,8 @@ export interface CreateBookingPayload {
   timeslotTypeId: string;
   scheduledStartAt: string; // ISO-8601
   clientReason?: string | null;
+  /** Optional. Extra services to stack back-to-back on this booking. */
+  additionalTimeslotTypeIds?: string[];
 }
 
 export interface CancelBookingPayload {

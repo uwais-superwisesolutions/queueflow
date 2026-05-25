@@ -32,6 +32,24 @@ export function endShift() {
   });
 }
 
+export interface DelayPushResponse {
+  shifted: number;
+  notified: number;
+}
+
+/**
+ * Org user pushes a manual delay onto their queue — every upcoming
+ * scheduled/checked-in booking shifts forward by N minutes and each
+ * affected client gets a delay SMS. Returns counts.
+ */
+export function pushDelay(minutes: number) {
+  return api.request<DelayPushResponse>({
+    url: '/secure/me/delay-push',
+    method: 'POST',
+    data: { minutes },
+  });
+}
+
 // ---------- /secure/sessions/* (super user view) ----------
 
 export function listActiveSessions() {

@@ -165,7 +165,13 @@ function ClientSlotPickerRoute() {
   return (
     <ClientSlotPickerScreen
       onSelect={(sel) =>
-        navigate('/client/confirm', { state: { slot: sel.slot, clientReason } })
+        navigate('/client/confirm', {
+          state: {
+            slot: sel.slot,
+            clientReason,
+            additionalTimeslotTypeIds: sel.additionalTimeslotTypeIds,
+          },
+        })
       }
       onBack={() => navigate('/client')}
     />
@@ -175,15 +181,21 @@ function ClientConfirmationRoute() {
   const navigate = useNavigate()
   const location = useLocation()
   const state = location.state as
-    | { slot?: import('@/types').SlotResponse; clientReason?: string | null }
+    | {
+        slot?: import('@/types').SlotResponse;
+        clientReason?: string | null;
+        additionalTimeslotTypeIds?: string[];
+      }
     | null
   const slot = state?.slot
   const clientReason = state?.clientReason ?? null
+  const additionalTimeslotTypeIds = state?.additionalTimeslotTypeIds
   if (!slot) return <Navigate to="/client/slots" replace />
   return (
     <ClientConfirmationScreen
       slot={slot}
       clientReason={clientReason}
+      additionalTimeslotTypeIds={additionalTimeslotTypeIds}
       onResolved={({ reason, booking }) => {
         if (reason === 'approved') {
           navigate('/client/status', { replace: true, state: { bookingId: booking.id } })
